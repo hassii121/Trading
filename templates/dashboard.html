@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>HASSII Institute — Market Analysis</title>
+  <link rel="stylesheet" href="/static/css/dashboard.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────────────── -->
+<header class="header">
+  <div class="header-left">
+    <span class="logo">⬡ HASSII Institute</span>
+    <span class="subtitle">Institutional Market Analysis</span>
+  </div>
+  <div class="header-right">
+    <span class="badge live" id="status-badge">● LIVE</span>
+    <span class="clock" id="clock">--:--:--</span>
+  </div>
+</header>
+
+<!-- ── Pair tabs ────────────────────────────────────────────────────── -->
+<nav class="pair-nav">
+  {% for pair in pairs %}
+  <button class="pair-tab {% if loop.first %}active{% endif %}"
+          data-pair="{{ pair }}"
+          onclick="selectPair('{{ pair }}')">
+    {{ pair.replace('USDT','/USDT') }}
+  </button>
+  {% endfor %}
+</nav>
+
+<!-- ── Timeframe selector (separate row) ────────────────────────────── -->
+<nav class="tf-nav">
+  <span class="tf-label">TIMEFRAME</span>
+  <button class="tf-tab" data-tf="1m"  onclick="selectTF('1m')">M1</button>
+  <button class="tf-tab" data-tf="5m"  onclick="selectTF('5m')">M5</button>
+  <button class="tf-tab" data-tf="15m" onclick="selectTF('15m')">M15</button>
+  <button class="tf-tab active" data-tf="30m" onclick="selectTF('30m')">M30</button>
+  <button class="tf-tab" data-tf="1h"  onclick="selectTF('1h')">H1</button>
+  <button class="tf-tab" data-tf="4h"  onclick="selectTF('4h')">H4</button>
+</nav>
+
+<!-- ── Main content ──────────────────────────────────────────────────── -->
+<main class="main">
+
+  <!-- Signal card -->
+  <section class="signal-card" id="signal-card">
+    <div class="signal-header">
+      <span class="pair-title" id="sig-pair">—</span>
+      <span class="tf-badge" id="sig-tf">—</span>
+      <span class="bias-badge neutral" id="sig-bias">NO TRADE</span>
+      <span class="confidence-ring" id="sig-conf">—</span>
+    </div>
+
+    <div class="signal-grid">
+      <div class="sig-block">
+        <div class="sig-label">ENTRY ZONE</div>
+        <div class="sig-value" id="sig-entry">—</div>
+      </div>
+      <div class="sig-block">
+        <div class="sig-label">STOP LOSS</div>
+        <div class="sig-value red" id="sig-sl">—</div>
+      </div>
+      <div class="sig-block">
+        <div class="sig-label">TAKE PROFIT 1</div>
+        <div class="sig-value green" id="sig-tp1">—</div>
+      </div>
+      <div class="sig-block">
+        <div class="sig-label">TAKE PROFIT 2</div>
+        <div class="sig-value green" id="sig-tp2">—</div>
+      </div>
+      <div class="sig-block">
+        <div class="sig-label">TAKE PROFIT 3</div>
+        <div class="sig-value green" id="sig-tp3">—</div>
+      </div>
+      <div class="sig-block">
+        <div class="sig-label">CONFIDENCE</div>
+        <div class="sig-value gold" id="sig-conf-pct">—</div>
+      </div>
+    </div>
+
+    <div class="reason-box">
+      <div class="sig-label">REASON SUMMARY</div>
+      <div class="reason-text" id="sig-reason">Waiting for analysis…</div>
+    </div>
+  </section>
+
+  <!-- Engine status panels -->
+  <section class="engines-row">
+
+    <div class="engine-panel" id="eng1">
+      <div class="eng-title">⬡ ENGINE 1 <span class="eng-tag">MARKET DATA</span></div>
+      <div class="eng-body" id="eng1-body">
+        <div class="eng-row"><span>Price</span><span id="e1-price">—</span></div>
+        <div class="eng-row"><span>Trend</span><span id="e1-trend">—</span></div>
+        <div class="eng-row"><span>Volatility</span><span id="e1-volatility">—</span></div>
+        <div class="eng-row"><span>Session</span><span id="e1-session">—</span></div>
+        <div class="eng-row"><span>Phase</span><span id="e1-phase">—</span></div>
+        <div class="eng-row"><span>Sentiment</span><span id="e1-sentiment">—</span></div>
+        <div class="eng-row"><span>Funding</span><span id="e1-funding">—</span></div>
+        <div class="eng-row"><span>OI Trend</span><span id="e1-oi">—</span></div>
+      </div>
+    </div>
+
+    <div class="engine-panel" id="eng2">
+      <div class="eng-title">⬡ ENGINE 2 <span class="eng-tag">LIQUIDITY</span></div>
+      <div class="eng-body" id="eng2-body">
+        <div class="eng-row"><span>BSL Zone</span><span id="e2-bsl">—</span></div>
+        <div class="eng-row"><span>SSL Zone</span><span id="e2-ssl">—</span></div>
+        <div class="eng-row"><span>Sweep</span><span id="e2-sweep">—</span></div>
+        <div class="eng-row"><span>Reaction</span><span id="e2-reaction">—</span></div>
+        <div class="eng-row"><span>Bias</span><span id="e2-bias">—</span></div>
+        <div class="eng-row"><span>Signal</span><span id="e2-sig">—</span></div>
+      </div>
+    </div>
+
+    <div class="engine-panel" id="eng3">
+      <div class="eng-title">⬡ ENGINE 3 <span class="eng-tag">STRUCTURE</span></div>
+      <div class="eng-body" id="eng3-body">
+        <div class="eng-row"><span>Trend</span><span id="e3-trend">—</span></div>
+        <div class="eng-row"><span>Structure</span><span id="e3-labels">—</span></div>
+        <div class="eng-row"><span>BOS</span><span id="e3-bos">—</span></div>
+        <div class="eng-row"><span>CHoCH</span><span id="e3-choch">—</span></div>
+        <div class="eng-row"><span>Strength</span><span id="e3-strength">—</span></div>
+        <div class="eng-row"><span>Manipulation</span><span id="e3-manip">—</span></div>
+        <div class="eng-row"><span>Bias</span><span id="e3-bias">—</span></div>
+        <div class="eng-row"><span>Signal</span><span id="e3-sig">—</span></div>
+      </div>
+    </div>
+
+    <div class="engine-panel" id="eng4">
+      <div class="eng-title">⬡ ENGINE 4 <span class="eng-tag">STRATEGY BRAIN</span></div>
+      <div class="eng-body" id="eng4-body">
+        <div class="eng-row"><span>Decision</span><span id="e4-dec">—</span></div>
+        <div class="eng-row"><span>Setup</span><span id="e4-setup">—</span></div>
+        <div class="eng-row"><span>Entry Zone</span><span id="e4-entry">—</span></div>
+        <div class="eng-row"><span>Stop Loss</span><span id="e4-sl">—</span></div>
+        <div class="eng-row"><span>TP1 / TP2</span><span id="e4-tp">—</span></div>
+        <div class="eng-row"><span>Risk/Reward</span><span id="e4-rr">—</span></div>
+        <div class="eng-row"><span>Prob Score</span><span id="e4-prob">—</span></div>
+      </div>
+    </div>
+
+    <div class="engine-panel" id="eng5">
+      <div class="eng-title">⬡ ENGINE 5 <span class="eng-tag">CONFIDENCE</span></div>
+      <div class="eng-body" id="eng5-body">
+        <div class="eng-row"><span>Session</span><span id="e5-session">—</span></div>
+        <div class="eng-row"><span>Liquidity</span><span id="e5-liq">—</span></div>
+        <div class="eng-row"><span>Structure</span><span id="e5-str">—</span></div>
+        <div class="eng-row"><span>Funding</span><span id="e5-fund">—</span></div>
+        <div class="eng-row"><span>Volatility</span><span id="e5-vol">—</span></div>
+        <div class="eng-row"><span>Risk %</span><span id="e5-risk">—</span></div>
+        <div class="eng-row"><span>SL Valid</span><span id="e5-sl">—</span></div>
+        <div class="eng-row"><span class="bold">Score / Label</span><span class="bold gold" id="e5-total">—</span></div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- Signal history table -->
+  <section class="history-section">
+    <div class="section-title">SIGNAL HISTORY</div>
+    <table class="hist-table">
+      <thead>
+        <tr>
+          <th>TIME</th><th>PAIR</th><th>BIAS</th>
+          <th>ENTRY</th><th>SL</th><th>TP1</th>
+          <th>CONFIDENCE</th><th>REASON</th>
+        </tr>
+      </thead>
+      <tbody id="history-body">
+        <tr><td colspan="8" class="no-data">No signals yet — analysis running…</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+</main>
+
+<script src="/static/js/dashboard.js"></script>
+</body>
+</html>
