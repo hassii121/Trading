@@ -24,7 +24,11 @@ app      = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 # Shared Binance client (public market data — no auth required for candles)
-binance_client = Client(cfg.API_KEY, cfg.API_SECRET)
+try:
+    binance_client = Client(cfg.API_KEY, cfg.API_SECRET)
+except Exception as e:
+    log.warning("Binance client init failed (geo-restriction?): %s", e)
+    binance_client = Client(cfg.API_KEY, cfg.API_SECRET, requests_params={"timeout": 30})
 
 # Engine instances
 engine1 = Engine1(cfg, binance_client)
@@ -280,4 +284,4 @@ if __name__ == "__main__":
     t.start()
 
 
-    socketio.run(app, host=cfg.HOST, port=cfg.PORT, debug=False)
+    socketio.run(app, host=cfg.HOST, port=cfg.PORT, debug=False, allow_unsafe_werkzeug=True)
