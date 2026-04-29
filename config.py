@@ -31,8 +31,8 @@ class Config:
     CANDLE_LIMIT: int = 200
 
     # ── Web server ────────────────────────────────────────────────────
-    HOST: str = "127.0.0.1"
-    PORT: int = 5050
+    HOST: str = field(default_factory=lambda: os.getenv("HOST", "0.0.0.0"))
+    PORT: int = field(default_factory=lambda: int(os.getenv("PORT", "5050")))
 
     # ── Analysis refresh ─────────────────────────────────────────────
     REFRESH_SECONDS: int = 30   # how often all engines re-run
