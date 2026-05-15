@@ -170,8 +170,9 @@ function appendHistory(data) {
   const ph = tbody.querySelector('.no-data');
   if (ph) ph.parentElement.remove();
 
-  const now   = new Date();
-  const time  = now.toISOString().substring(11, 19) + ' UTC';
+  const now   = new Date(Date.now() + 5 * 60 * 60 * 1000);
+  const date  = now.toISOString().substring(0, 10);
+  const time  = date + ' ' + now.toISOString().substring(11, 19) + ' UTC+5';
   const bias  = sig.bias || '—';
   const bCls  = bias === 'LONG' ? 'green' : bias === 'SHORT' ? 'red' : '';
 
@@ -179,6 +180,7 @@ function appendHistory(data) {
   tr.innerHTML = `
     <td>${time}</td>
     <td>${(data.pair || '').replace('USDT', '/USDT')}</td>
+    <td style="color:var(--gold)">${(data.timeframe || '—').toUpperCase()}</td>
     <td class="${bCls}">${bias}</td>
     <td>${fmt(sig.entry_low)}</td>
     <td class="red">${fmt(sig.stop_loss)}</td>
@@ -426,3 +428,208 @@ function setManip(id, detected) {
 function esc(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
+/* ── Page navigation ────────────────────────────────────────────────── */
+function switchPage(page) {
+  document.querySelectorAll('.page-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.page === page);
+  });
+  document.querySelectorAll('.page').forEach(el => {
+    el.classList.toggle('hidden', el.id !== 'page-' + page);
+  });
+
+  if (page === 'account')  loadAccount();
+  if (page === 'settings') loadTradingSettings();
+}
+
+/* ── Account page ───────────────────────────────────────────────────── */
+function loadAccount() {
+  fetch('/api/trading/account')
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        const pnl = d.unrealized_pnl || 0;
+        const el  = document.getElementById('acc-upnl');
+        document.getElementById('acc-balance').textContent = fmt(d.balance);
+        document.getElementById('acc-equity').textContent  = fmt(d.equity);
+        document.getElementById('acc-avail').textContent   = fmt(d.available);
+        if (el) {
+          el.textContent = (pnl >= 0 ? '+' : '') + fmt(pnl);
+          el.style.color = pnl > 0 ? 'var(--green)' : pnl < 0 ? 'var(--red)' : 'var(--text)';
+        }
+      }
+    })
+    .catch(() => {});
+
+  fetch('/api/trading/open')
+    .then(r => r.json())
+    .then(rows => renderOpenTrades(rows))
+    .catch(() => {});
+
+  fetch('/api/trading/history')
+    .then(r => r.json())
+    .then(rows => renderClosedTrades(rows))
+    .catch(() => {});
+}
+
+function renderOpenTrades(rows) {
+  const tbody = document.getElementById('open-trades-body');
+  if (!tbody) return;
+  if (!rows || !rows.length) {
+    tbody.innerHTML = '<tr><td colspan="11" class="no-data">No open trades</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(t => {
+    const dirCls = t.direction === 'BUY' ? 'green' : 'red';
+    const pnlVal = _openPnl[t.pair] != null ? _openPnl[t.pair] : null;
+    const pnlStr = pnlVal != null
+      ? `<span style="color:${pnlVal>=0?'var(--green)':'var(--red)'}">${pnlVal>=0?'+':''}${fmt(pnlVal)}</span>`
+      : '<span id="upnl-'+esc(t.pair)+'">—</span>';
+    return `<tr>
+      <td>${(t.pair||'').replace('USDT','/USDT')}</td>
+      <td class="${dirCls}">${t.direction||'—'}</td>
+      <td style="color:var(--gold)">${(t.timeframe||'—').toUpperCase()}</td>
+      <td>${fmt(t.entry_price)}</td>
+      <td class="red">${fmt(t.sl)}</td>
+      <td class="green">${fmt(t.tp1)}</td>
+      <td>${t.qty!=null?t.qty:'—'}</td>
+      <td>${fmt(t.notional)}</td>
+      <td class="gold">${t.confidence!=null?t.confidence+'%':'—'}</td>
+      <td>${pnlStr}</td>
+      <td>${t.opened_at||'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderClosedTrades(rows) {
+  const tbody = document.getElementById('closed-trades-body');
+  if (!tbody) return;
+  if (!rows || !rows.length) {
+    tbody.innerHTML = '<tr><td colspan="11" class="no-data">No closed trades</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(t => {
+    const dirCls = t.direction === 'BUY' ? 'green' : 'red';
+    const pnl    = t.pnl || 0;
+    const pnlCls = pnl > 0 ? 'green' : pnl < 0 ? 'red' : '';
+    return `<tr>
+      <td>${(t.pair||'').replace('USDT','/USDT')}</td>
+      <td class="${dirCls}">${t.direction||'—'}</td>
+      <td style="color:var(--gold)">${(t.timeframe||'—').toUpperCase()}</td>
+      <td>${fmt(t.entry_price)}</td>
+      <td>${fmt(t.close_price)}</td>
+      <td class="red">${fmt(t.sl)}</td>
+      <td class="green">${fmt(t.tp1)}</td>
+      <td>${t.qty!=null?t.qty:'—'}</td>
+      <td class="${pnlCls}">${pnl>=0?'+':''}${fmt(pnl)}</td>
+      <td style="color:${t.close_reason==='TP'?'var(--green)':'var(--red)'}">${t.close_reason||'—'}</td>
+      <td>${t.closed_at||'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+/* ── Trading settings page ──────────────────────────────────────────── */
+function loadTradingSettings() {
+  fetch('/api/trading/settings')
+    .then(r => r.json())
+    .then(d => {
+      document.getElementById('set-apikey').value        = d.api_key        || '';
+      document.getElementById('set-apisecret').value     = d.api_secret     || '';
+      document.getElementById('set-tn-apikey').value     = d.tn_api_key     || '';
+      document.getElementById('set-tn-apisecret').value  = d.tn_api_secret  || '';
+      document.getElementById('set-confidence').value  = d.min_confidence != null ? d.min_confidence : 75;
+      document.getElementById('set-maxtrades').value   = d.max_trades  != null ? d.max_trades  : 6;
+      document.getElementById('set-leverage').value    = d.leverage    != null ? d.leverage    : 10;
+      document.getElementById('set-riskpct').value     = d.risk_pct    != null ? d.risk_pct    : 0.5;
+      const cb = document.getElementById('set-enabled');
+      if (cb) { cb.checked = !!d.enabled; _updateToggleText(cb.checked); }
+      const tn = document.getElementById('set-testnet');
+      if (tn) { tn.checked = !!d.testnet; _updateTestnetText(tn.checked); }
+    })
+    .catch(() => {});
+}
+
+function saveTradingSettings() {
+  const cb = document.getElementById('set-enabled');
+  const tn = document.getElementById('set-testnet');
+  const payload = {
+    api_key:        document.getElementById('set-apikey').value.trim(),
+    api_secret:     document.getElementById('set-apisecret').value.trim(),
+    tn_api_key:     document.getElementById('set-tn-apikey').value.trim(),
+    tn_api_secret:  document.getElementById('set-tn-apisecret').value.trim(),
+    enabled:        cb ? cb.checked : false,
+    testnet:        tn ? tn.checked : false,
+    min_confidence: parseInt(document.getElementById('set-confidence').value) || 75,
+    max_trades:     parseInt(document.getElementById('set-maxtrades').value)  || 6,
+    leverage:       parseInt(document.getElementById('set-leverage').value)   || 10,
+    risk_pct:       parseFloat(document.getElementById('set-riskpct').value)  || 0.5,
+  };
+
+  const statusEl = document.getElementById('settings-status');
+  if (statusEl) statusEl.textContent = 'Saving…';
+
+  fetch('/api/trading/settings', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(payload),
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (statusEl) {
+        statusEl.textContent = d.ok ? '✓ Saved' : '✗ Error';
+        statusEl.style.color = d.ok ? 'var(--green)' : 'var(--red)';
+        setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
+      }
+    })
+    .catch(() => {
+      if (statusEl) { statusEl.textContent = '✗ Network error'; statusEl.style.color = 'var(--red)'; }
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const cb = document.getElementById('set-enabled');
+  if (cb) cb.addEventListener('change', () => _updateToggleText(cb.checked));
+  const tn = document.getElementById('set-testnet');
+  if (tn) tn.addEventListener('change', () => _updateTestnetText(tn.checked));
+});
+
+function _updateToggleText(checked) {
+  const el = document.getElementById('toggle-text');
+  if (el) { el.textContent = checked ? 'ENABLED' : 'DISABLED'; }
+}
+
+function _updateTestnetText(checked) {
+  const el = document.getElementById('toggle-testnet-text');
+  if (el) {
+    el.textContent  = checked ? 'TESTNET' : 'REAL';
+    el.style.color  = checked ? 'var(--gold)' : 'var(--text2)';
+  }
+}
+
+/* ── Live unrealized PnL cache (updated via socket) ─────────────────── */
+const _openPnl = {};
+
+socket.on('trade_pnl', (data) => {
+  _openPnl[data.pair] = data.unrealized_pnl;
+  const el = document.getElementById('upnl-' + data.pair);
+  if (el) {
+    const v = data.unrealized_pnl || 0;
+    el.textContent = (v >= 0 ? '+' : '') + fmt(v);
+    el.style.color = v > 0 ? 'var(--green)' : v < 0 ? 'var(--red)' : 'var(--text)';
+  }
+});
+
+socket.on('trade_opened', (data) => {
+  if (document.getElementById('page-account') &&
+      !document.getElementById('page-account').classList.contains('hidden')) {
+    loadAccount();
+  }
+});
+
+socket.on('trade_closed', (data) => {
+  delete _openPnl[data.pair];
+  if (document.getElementById('page-account') &&
+      !document.getElementById('page-account').classList.contains('hidden')) {
+    loadAccount();
+  }
+});

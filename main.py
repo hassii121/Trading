@@ -2,7 +2,7 @@
 main.py — HASSII Institute entry point.
 Starts Flask + SocketIO server. Open http://localhost:5050 in browser.
 """
-from flask import Flask, render_template
+from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, emit
 import threading, logging, time
 from concurrent.futures import ThreadPoolExecutor
@@ -15,6 +15,8 @@ from engines.engine2 import Engine2
 from engines.engine3 import Engine3
 from engines.engine4 import Engine4
 from engines.engine5 import Engine5
+from engines.trader import AutoTrader
+import trader_db
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
@@ -36,6 +38,9 @@ engine2 = Engine2(cfg, binance_client)
 engine3 = Engine3(cfg, binance_client)
 engine4 = Engine4(cfg)
 engine5 = Engine5(cfg)
+
+# Auto-trader
+auto_trader = AutoTrader(socketio)
 
 # Cache: last known result per pair — replayed to newly connected clients
 _latest: dict = {}
@@ -79,11 +84,12 @@ def on_set_timeframe(data):
 def _analyse_pair(pair: str, tf: str):
     try:
         e1 = engine1.run(pair, timeframe=tf)
-        e2 = engine2.run(pair)
+        e2 = engine2.run(pair, timeframe=tf)
         e3 = engine3.run(pair, timeframe=tf, e2_result=e2)
         e4 = engine4.run(pair, e1, e2, e3)
         e5 = engine5.run(pair, e1, e2, e3, e4)
-        _emit_payload(pair, e1, e2, e3, e4, e5)
+        payload = _emit_payload(pair, e1, e2, e3, e4, e5)
+        auto_trader.execute_signal(pair, payload)
     except Exception as e:
         log.error("_analyse_pair error [%s]: %s", pair, e)
 
@@ -100,6 +106,7 @@ def analysis_loop():
     """Runs all engines on all pairs in parallel, then sleeps REFRESH_SECONDS."""
     while True:
         _run_all(_current_tf)
+        auto_trader.monitor_trades()
         time.sleep(cfg.REFRESH_SECONDS)
 
 
@@ -134,14 +141,11 @@ def _emit_payload(pair: str, e1: dict, e2: dict, e3: dict, e4: dict, e5: dict):
     }
     _latest[pair] = payload
     socketio.emit("signal", payload)
-    log.info(
-        "[%s/%s] E4→%s  E5→%d/100 (%s) risk:%.2f%%",
-        pair, e1.get("timeframe", "?"),
-        final_dec,
-        confidence,
-        e5.get("label", "?"),
-        e5.get("risk_pct", 0),
-    )
+    log.info("[%s/%s] E4→%s  E5→%d/100 (%s) risk:%.2f%%",
+             pair, e1.get("timeframe", "?"),
+             final_dec, confidence,
+             e5.get("label", "?"), e5.get("risk_pct", 0))
+    return payload
 
 
 # ── Flatten helpers ───────────────────────────────────────────────────────────
@@ -268,6 +272,58 @@ def _flatten_e2(e2: dict) -> dict:
         "bias":         e2.get("bias"),
         "signal":       e2.get("signal"),
     }
+
+
+# ── Trading Settings ──────────────────────────────────────────────────────────
+
+@app.route("/api/trading/settings", methods=["GET"])
+def api_get_trading_settings():
+    return jsonify({
+        "enabled":           trader_db.get_setting("enabled",        "0") == "1",
+        "testnet":           trader_db.get_setting("testnet",        "0") == "1",
+        "api_key":           "****" if trader_db.get_setting("api_key")        else "",
+        "api_secret":        "****" if trader_db.get_setting("api_secret")     else "",
+        "tn_api_key":        "****" if trader_db.get_setting("tn_api_key")     else "",
+        "tn_api_secret":     "****" if trader_db.get_setting("tn_api_secret")  else "",
+        "min_confidence":    int(trader_db.get_setting("min_confidence", "75")),
+        "max_trades":        int(trader_db.get_setting("max_trades",     "6")),
+        "leverage":          int(trader_db.get_setting("leverage",       "10")),
+        "risk_pct":          float(trader_db.get_setting("risk_pct",     "0.5")),
+    })
+
+@app.route("/api/trading/settings", methods=["POST"])
+def api_save_trading_settings():
+    data = request.json
+    if data.get("api_key")        and "****" not in data["api_key"]:
+        trader_db.set_setting("api_key",        data["api_key"])
+    if data.get("api_secret")     and "****" not in data["api_secret"]:
+        trader_db.set_setting("api_secret",     data["api_secret"])
+    if data.get("tn_api_key")     and "****" not in data["tn_api_key"]:
+        trader_db.set_setting("tn_api_key",     data["tn_api_key"])
+    if data.get("tn_api_secret")  and "****" not in data["tn_api_secret"]:
+        trader_db.set_setting("tn_api_secret",  data["tn_api_secret"])
+    trader_db.set_setting("enabled",        "1" if data.get("enabled") else "0")
+    trader_db.set_setting("testnet",        "1" if data.get("testnet") else "0")
+    trader_db.set_setting("min_confidence", str(int(data.get("min_confidence", 75))))
+    trader_db.set_setting("max_trades",     str(int(data.get("max_trades",     6))))
+    trader_db.set_setting("leverage",       str(int(data.get("leverage",       10))))
+    trader_db.set_setting("risk_pct",       str(float(data.get("risk_pct",     0.5))))
+    return jsonify({"ok": True})
+
+
+# ── Trading Account ───────────────────────────────────────────────────────────
+
+@app.route("/api/trading/account")
+def api_trading_account():
+    return jsonify(auto_trader.get_account_info())
+
+@app.route("/api/trading/open")
+def api_open_trades():
+    return jsonify(trader_db.get_open_trades())
+
+@app.route("/api/trading/history")
+def api_trading_history():
+    return jsonify(trader_db.get_closed_trades())
 
 
 # ── Start ─────────────────────────────────────────────────────────────────────

@@ -11,6 +11,16 @@ SWING_N       = 3      # bars each side to confirm swing high/low
 EQ_TOLERANCE  = 0.002  # 0.2% — price within this range = "equal" level
 SWEEP_LOOKBACK = 8     # last N candles checked for sweeps
 
+# Liquidity TF always one step above selected; sweep TF = selected or one below
+TF_MAP = {
+    "1m":  ("15m", "5m"),
+    "5m":  ("30m", "15m"),
+    "15m": ("1h",  "15m"),
+    "30m": ("1h",  "15m"),
+    "1h":  ("4h",  "30m"),
+    "4h":  ("1d",  "1h"),
+}
+
 
 class Engine2:
     def __init__(self, cfg, binance_client):
@@ -18,11 +28,11 @@ class Engine2:
         self.client = binance_client
 
     # ── Public entry point ───────────────────────────────────────────
-    def run(self, pair: str) -> dict:
+    def run(self, pair: str, timeframe: str = "30m") -> dict:
         try:
-            # 1h candles for structure, 15m candles for sweep detection
-            klines_1h  = self.client.get_klines(symbol=pair, interval="1h",  limit=100)
-            klines_15m = self.client.get_klines(symbol=pair, interval="15m", limit=60)
+            tf_liq, tf_sweep = TF_MAP.get(timeframe, ("1h", "15m"))
+            klines_1h  = self.client.get_klines(symbol=pair, interval=tf_liq,   limit=100)
+            klines_15m = self.client.get_klines(symbol=pair, interval=tf_sweep, limit=60)
 
             candles_1h  = self._parse(klines_1h)
             candles_15m = self._parse(klines_15m)
