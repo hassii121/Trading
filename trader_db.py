@@ -2,6 +2,22 @@ import sqlite3, os
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "trader.db")
 
+# Environment variable fallbacks — survive Railway redeploys
+_ENV_FALLBACKS = {
+    "api_key":        "TRADE_API_KEY",
+    "api_secret":     "TRADE_API_SECRET",
+    "tn_api_key":     "TRADE_TN_API_KEY",
+    "tn_api_secret":  "TRADE_TN_API_SECRET",
+    "enabled":        "TRADE_ENABLED",
+    "testnet":        "TRADE_TESTNET",
+    "min_confidence": "TRADE_MIN_CONFIDENCE",
+    "max_trades":     "TRADE_MAX_TRADES",
+    "leverage":       "TRADE_LEVERAGE",
+    "risk_pct":       "TRADE_RISK_PCT",
+    "trade_tp_usd":   "TRADE_TP_USD",
+    "basket_tp_usd":  "TRADE_BASKET_TP_USD",
+}
+
 def get_conn():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
@@ -57,7 +73,12 @@ def get_setting(key, default=""):
     conn = get_conn()
     row  = conn.execute("SELECT value FROM trading_settings WHERE key=?", (key,)).fetchone()
     conn.close()
-    return row["value"] if row else default
+    if row and row["value"]:
+        return row["value"]
+    env_var = _ENV_FALLBACKS.get(key)
+    if env_var:
+        return os.environ.get(env_var, default)
+    return default
 
 def set_setting(key, value):
     conn = get_conn()
