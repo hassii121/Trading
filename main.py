@@ -356,6 +356,32 @@ def api_save_trading_settings():
 def api_trading_account():
     return jsonify(auto_trader.get_account_info())
 
+@app.route("/api/trading/positions")
+@login_required
+def api_trading_positions():
+    """Live open positions pulled directly from Binance — shows all trades, not just bot-opened ones."""
+    try:
+        client = auto_trader._get_client()
+        raw    = client.futures_position_information()
+        positions = []
+        for p in raw:
+            amt = float(p.get("positionAmt", 0))
+            if amt == 0:
+                continue
+            positions.append({
+                "pair":       p["symbol"],
+                "direction":  "BUY" if amt > 0 else "SELL",
+                "qty":        abs(amt),
+                "entry_price": float(p.get("entryPrice", 0)),
+                "mark_price":  float(p.get("markPrice",  0)),
+                "unrealized_pnl": round(float(p.get("unRealizedProfit", 0)), 4),
+                "leverage":    int(p.get("leverage", 1)),
+                "notional":    round(abs(amt) * float(p.get("markPrice", 0)), 2),
+            })
+        return jsonify(positions)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/api/trading/open")
 @login_required
 def api_open_trades():

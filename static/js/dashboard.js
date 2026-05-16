@@ -461,9 +461,9 @@ function loadAccount() {
     })
     .catch(() => {});
 
-  fetch('/api/trading/open')
+  fetch('/api/trading/positions')
     .then(r => r.json())
-    .then(rows => renderOpenTrades(rows))
+    .then(rows => renderOpenTrades(Array.isArray(rows) ? rows : []))
     .catch(() => {});
 
   fetch('/api/trading/history')
@@ -481,22 +481,21 @@ function renderOpenTrades(rows) {
   }
   tbody.innerHTML = rows.map(t => {
     const dirCls = t.direction === 'BUY' ? 'green' : 'red';
-    const pnlVal = _openPnl[t.pair] != null ? _openPnl[t.pair] : null;
-    const pnlStr = pnlVal != null
-      ? `<span style="color:${pnlVal>=0?'var(--green)':'var(--red)'}">${pnlVal>=0?'+':''}${fmt(pnlVal)}</span>`
-      : '<span id="upnl-'+esc(t.pair)+'">—</span>';
+    const pnl    = t.unrealized_pnl != null ? t.unrealized_pnl : 0;
+    const pnlCls = pnl > 0 ? 'var(--green)' : pnl < 0 ? 'var(--red)' : 'var(--text)';
+    const pnlStr = `<span style="color:${pnlCls}">${pnl>=0?'+':''}${fmt(pnl)}</span>`;
     return `<tr>
       <td>${(t.pair||'').replace('USDT','/USDT')}</td>
       <td class="${dirCls}">${t.direction||'—'}</td>
-      <td style="color:var(--gold)">${(t.timeframe||'—').toUpperCase()}</td>
+      <td style="color:var(--gold)">${t.leverage!=null?t.leverage+'x':'—'}</td>
       <td>${fmt(t.entry_price)}</td>
-      <td class="red">${fmt(t.sl)}</td>
-      <td class="green">${fmt(t.tp1)}</td>
+      <td>${fmt(t.mark_price)}</td>
+      <td>—</td>
       <td>${t.qty!=null?t.qty:'—'}</td>
       <td>${fmt(t.notional)}</td>
-      <td class="gold">${t.confidence!=null?t.confidence+'%':'—'}</td>
+      <td>—</td>
       <td>${pnlStr}</td>
-      <td>${t.opened_at||'—'}</td>
+      <td>—</td>
     </tr>`;
   }).join('');
 }
