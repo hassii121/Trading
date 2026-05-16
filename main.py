@@ -59,6 +59,34 @@ _latest: dict = {}
 # Currently selected timeframe (global — same for all pairs)
 _current_tf: str = "30m"
 
+# ── Dynamic pair list ─────────────────────────────────────────────────────────
+
+def _fetch_top_pairs() -> list:
+    """Fetch top N Binance Futures USDT pairs by 24h quote volume."""
+    try:
+        tickers = binance_client.futures_ticker()
+        usdt = [
+            t for t in tickers
+            if t["symbol"].endswith("USDT")
+            and not any(s in t["symbol"] for s in ["BUSD", "USDC", "TUSD"])
+        ]
+        usdt.sort(key=lambda x: float(x.get("quoteVolume", 0)), reverse=True)
+        pairs = [t["symbol"] for t in usdt[:cfg.TOP_PAIRS_COUNT]]
+        log.info("Pair list refreshed: %d pairs (top by 24h volume)", len(pairs))
+        return pairs
+    except Exception as e:
+        log.warning("Could not fetch top pairs, using fallback: %s", e)
+        return cfg.PAIRS
+
+def _refresh_pairs_loop():
+    """Periodically refresh the active pair list and notify all clients."""
+    while True:
+        time.sleep(cfg.PAIRS_REFRESH_HRS * 3600)
+        new_pairs = _fetch_top_pairs()
+        cfg.PAIRS = new_pairs
+        socketio.emit("pairs_update", {"pairs": new_pairs})
+        log.info("Pairs updated and pushed to clients")
+
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -396,15 +424,17 @@ def api_trading_history():
 # ── Start ─────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    # Fetch live top pairs on startup
+    cfg.PAIRS = _fetch_top_pairs()
+
     log.info("=" * 55)
     log.info("  HASSII Institute — Market Analysis System")
-    log.info("  Pairs   : %s", ", ".join(cfg.PAIRS))
+    log.info("  Pairs   : %d pairs (auto-selected by volume)", len(cfg.PAIRS))
     log.info("  Refresh : every %ds", cfg.REFRESH_SECONDS)
     log.info("  Open    : http://%s:%d", cfg.HOST, cfg.PORT)
     log.info("=" * 55)
 
-    t = threading.Thread(target=analysis_loop, daemon=True)
-    t.start()
-
+    threading.Thread(target=analysis_loop,       daemon=True).start()
+    threading.Thread(target=_refresh_pairs_loop, daemon=True).start()
 
     socketio.run(app, host=cfg.HOST, port=cfg.PORT, debug=False, allow_unsafe_werkzeug=True)

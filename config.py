@@ -9,13 +9,17 @@ load_dotenv()
 
 @dataclass
 class Config:
-    # ── Top 20 Binance USDT pairs by trading volume (fixed) ──────────
+    # ── Fallback pairs used only if Binance auto-fetch fails ──────────
     PAIRS: List[str] = field(default_factory=lambda: [
         "BTCUSDT",  "ETHUSDT",  "SOLUSDT",  "BNBUSDT",  "XRPUSDT",
         "DOGEUSDT", "PEPEUSDT", "ADAUSDT",  "SUIUSDT",  "LINKUSDT",
         "AVAXUSDT", "TRXUSDT",  "LTCUSDT",  "UNIUSDT",  "DOTUSDT",
         "NEARUSDT", "ARBUSDT",  "OPUSDT",   "ATOMUSDT", "MATICUSDT",
     ])
+
+    # ── Dynamic pair settings ─────────────────────────────────────────
+    TOP_PAIRS_COUNT:   int = 30   # how many top-volume pairs to track
+    PAIRS_REFRESH_HRS: int = 6    # refresh pair list every N hours
 
     # ── Binance ───────────────────────────────────────────────────────
     API_KEY:    str = field(default_factory=lambda: os.getenv("BINANCE_API_KEY",    ""))
