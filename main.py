@@ -289,6 +289,8 @@ def api_get_trading_settings():
         "max_trades":        int(trader_db.get_setting("max_trades",     "6")),
         "leverage":          int(trader_db.get_setting("leverage",       "10")),
         "risk_pct":          float(trader_db.get_setting("risk_pct",     "0.5")),
+        "trade_tp_usd":      float(trader_db.get_setting("trade_tp_usd",  "0")),
+        "basket_tp_usd":     float(trader_db.get_setting("basket_tp_usd", "0")),
     })
 
 @app.route("/api/trading/settings", methods=["POST"])
@@ -304,10 +306,12 @@ def api_save_trading_settings():
         trader_db.set_setting("tn_api_secret",  data["tn_api_secret"])
     trader_db.set_setting("enabled",        "1" if data.get("enabled") else "0")
     trader_db.set_setting("testnet",        "1" if data.get("testnet") else "0")
-    trader_db.set_setting("min_confidence", str(int(data.get("min_confidence", 75))))
-    trader_db.set_setting("max_trades",     str(int(data.get("max_trades",     6))))
-    trader_db.set_setting("leverage",       str(int(data.get("leverage",       10))))
-    trader_db.set_setting("risk_pct",       str(float(data.get("risk_pct",     0.5))))
+    trader_db.set_setting("min_confidence", str(int(data.get("min_confidence",   75))))
+    trader_db.set_setting("max_trades",     str(int(data.get("max_trades",       6))))
+    trader_db.set_setting("leverage",       str(int(data.get("leverage",         10))))
+    trader_db.set_setting("risk_pct",       str(float(data.get("risk_pct",       0.5))))
+    trader_db.set_setting("trade_tp_usd",   str(float(data.get("trade_tp_usd",   0))))
+    trader_db.set_setting("basket_tp_usd",  str(float(data.get("basket_tp_usd",  0))))
     return jsonify({"ok": True})
 
 

@@ -71,20 +71,42 @@ class AutoTrader:
             log.error("AutoTrader monitor: client init failed: %s", e)
             return
 
+        trade_tp_usd  = float(trader_db.get_setting("trade_tp_usd",  "0") or 0)
+        basket_tp_usd = float(trader_db.get_setting("basket_tp_usd", "0") or 0)
+
+        total_upnl   = 0.0
+        active_trades = []  # still-open trades after individual checks
+
         for trade in open_trades:
             pair = trade['pair']
             try:
                 positions = client.futures_position_information(symbol=pair)
                 pos = next((p for p in positions if float(p['positionAmt']) != 0), None)
                 if pos:
-                    # Still open — update unrealized PnL via socket
                     upnl = round(float(pos.get('unrealizedProfit', 0)), 4)
                     self.socketio.emit("trade_pnl", {"pair": pair, "unrealized_pnl": upnl})
+
+                    # Per-trade dollar TP
+                    if trade_tp_usd > 0 and upnl >= trade_tp_usd:
+                        log.info("AutoTrader [%s]: per-trade TP hit ($%.2f) — closing", pair, upnl)
+                        self._close_at_market(client, trade, "TP_USD")
+                    else:
+                        total_upnl += upnl
+                        active_trades.append(trade)
                 else:
-                    # Position closed — detect reason and record
                     self._handle_closed(client, trade)
             except Exception as e:
                 log.error("AutoTrader monitor error [%s]: %s", pair, e)
+
+        # Basket TP — close all remaining open trades if combined PnL target hit
+        if basket_tp_usd > 0 and active_trades and total_upnl >= basket_tp_usd:
+            log.info("AutoTrader: basket TP hit (total $%.2f >= $%.2f) — closing %d trades",
+                     total_upnl, basket_tp_usd, len(active_trades))
+            for trade in active_trades:
+                try:
+                    self._close_at_market(client, trade, "BASKET_TP")
+                except Exception as e:
+                    log.error("AutoTrader basket TP [%s]: %s", trade['pair'], e)
 
     # ── Public: account info for dashboard ───────────────────────────────
 
@@ -209,6 +231,52 @@ class AutoTrader:
             log.error("AutoTrader [%s]: Binance error: %s", pair, e.message)
         except Exception as e:
             log.error("AutoTrader [%s]: _place_trade error: %s", pair, e)
+
+    # ── Internal: force-close at market (dollar TP / basket TP) ─────────
+
+    def _close_at_market(self, client, trade, reason: str):
+        pair = trade['pair']
+        try:
+            # Cancel remaining SL/TP orders
+            for oid in (trade.get('sl_order_id'), trade.get('tp1_order_id')):
+                if oid:
+                    try:
+                        client.futures_cancel_order(symbol=pair, orderId=int(oid))
+                    except Exception:
+                        pass
+
+            # Confirm position is still open and get actual qty
+            positions = client.futures_position_information(symbol=pair)
+            pos = next((p for p in positions if float(p['positionAmt']) != 0), None)
+            if not pos:
+                self._handle_closed(client, trade)
+                return
+
+            actual_qty = abs(float(pos['positionAmt']))
+            close_side = "SELL" if trade['direction'] == "BUY" else "BUY"
+
+            client.futures_create_order(
+                symbol=pair, side=close_side, type="MARKET",
+                quantity=actual_qty, reduceOnly=True
+            )
+
+            fills = client.futures_account_trades(symbol=pair, limit=5)
+            close_price = float(fills[-1]['price']) if fills else trade['entry_price']
+
+            pnl = (close_price - trade['entry_price']) * trade['qty']
+            if trade['direction'] == "SELL":
+                pnl = -pnl
+            pnl = round(pnl, 4)
+
+            trader_db.close_trade(trade['id'], close_price, pnl, reason)
+            self.socketio.emit("trade_closed", {
+                "pair": pair, "pnl": pnl,
+                "close_price": close_price, "close_reason": reason,
+            })
+            log.info("AutoTrader [%s]: closed | %s | PnL: %.4f", pair, reason, pnl)
+
+        except Exception as e:
+            log.error("AutoTrader [%s]: _close_at_market error: %s", pair, e)
 
     # ── Internal: handle detected close ─────────────────────────────────
 

@@ -538,9 +538,11 @@ function loadTradingSettings() {
       document.getElementById('set-tn-apikey').value     = d.tn_api_key     || '';
       document.getElementById('set-tn-apisecret').value  = d.tn_api_secret  || '';
       document.getElementById('set-confidence').value  = d.min_confidence != null ? d.min_confidence : 75;
-      document.getElementById('set-maxtrades').value   = d.max_trades  != null ? d.max_trades  : 6;
-      document.getElementById('set-leverage').value    = d.leverage    != null ? d.leverage    : 10;
-      document.getElementById('set-riskpct').value     = d.risk_pct    != null ? d.risk_pct    : 0.5;
+      document.getElementById('set-maxtrades').value   = d.max_trades   != null ? d.max_trades   : 6;
+      document.getElementById('set-leverage').value    = d.leverage     != null ? d.leverage     : 10;
+      document.getElementById('set-riskpct').value     = d.risk_pct     != null ? d.risk_pct     : 0.5;
+      document.getElementById('set-trade-tp').value    = d.trade_tp_usd  != null ? d.trade_tp_usd  : 0;
+      document.getElementById('set-basket-tp').value   = d.basket_tp_usd != null ? d.basket_tp_usd : 0;
       const cb = document.getElementById('set-enabled');
       if (cb) { cb.checked = !!d.enabled; _updateToggleText(cb.checked); }
       const tn = document.getElementById('set-testnet');
@@ -559,10 +561,12 @@ function saveTradingSettings() {
     tn_api_secret:  document.getElementById('set-tn-apisecret').value.trim(),
     enabled:        cb ? cb.checked : false,
     testnet:        tn ? tn.checked : false,
-    min_confidence: parseInt(document.getElementById('set-confidence').value) || 75,
-    max_trades:     parseInt(document.getElementById('set-maxtrades').value)  || 6,
-    leverage:       parseInt(document.getElementById('set-leverage').value)   || 10,
-    risk_pct:       parseFloat(document.getElementById('set-riskpct').value)  || 0.5,
+    min_confidence: parseInt(document.getElementById('set-confidence').value)  || 75,
+    max_trades:     parseInt(document.getElementById('set-maxtrades').value)   || 6,
+    leverage:       parseInt(document.getElementById('set-leverage').value)    || 10,
+    risk_pct:       parseFloat(document.getElementById('set-riskpct').value)   || 0.5,
+    trade_tp_usd:   parseFloat(document.getElementById('set-trade-tp').value)  || 0,
+    basket_tp_usd:  parseFloat(document.getElementById('set-basket-tp').value) || 0,
   };
 
   const statusEl = document.getElementById('settings-status');
