@@ -7,9 +7,9 @@ import logging
 
 log = logging.getLogger(__name__)
 
-SWING_N       = 3      # bars each side to confirm swing high/low
-EQ_TOLERANCE  = 0.002  # 0.2% — price within this range = "equal" level
-SWEEP_LOOKBACK = 8     # last N candles checked for sweeps
+SWING_N        = 3      # bars each side to confirm swing high/low
+EQ_TOLERANCE   = 0.002  # 0.2% — price within this range = "equal" level
+SWEEP_LOOKBACK = 20     # last N candles checked for sweeps
 
 # Liquidity TF always one step above selected; sweep TF = selected or one below
 TF_MAP = {
@@ -165,8 +165,8 @@ class Engine2:
     # ── Post-sweep reaction ──────────────────────────────────────────
     @staticmethod
     def _analyze_reaction(candles_15m: list, sweep: dict) -> str:
-        # Use last 3 candles to measure reaction
-        sample = candles_15m[-3:]
+        # Use last 5 candles to measure reaction
+        sample = candles_15m[-5:]
         if len(sample) < 2:
             return "None"
         first_close = sample[0]["close"]

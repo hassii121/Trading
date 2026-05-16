@@ -85,33 +85,41 @@ class Engine4:
             reasons.append("Sweep reaction: Reversal confirmed")
 
             # ════════════════════════════════════════════════════════
-            # GATE 4 — CHoCH structure confirmation
+            # GATE 4 — Structure confirmation: CHoCH or BOS
+            # CHoCH preferred; BOS accepted as alternative
             # ════════════════════════════════════════════════════════
-            if not choch_ok:
-                return self._no_trade(pair, price, "No CHoCH — structure not confirmed, no entry", reasons)
+            bos_dir = "Bullish" if bos.get("confirmed") and sweep_dir == "down" else \
+                      "Bearish" if bos.get("confirmed") and sweep_dir == "up"   else ""
 
-            # Alignment: sell-side sweep + bullish CHoCH = BUY
-            #            buy-side sweep  + bearish CHoCH = SELL
-            aligned = (
-                (sweep_dir == "down" and choch_dir == "Bullish") or
-                (sweep_dir == "up"   and choch_dir == "Bearish")
-            )
-            if not aligned:
-                return self._no_trade(
-                    pair, price,
-                    f"Sweep ({sweep_dir}) and CHoCH ({choch_dir}) are misaligned — conflicting signals",
-                    reasons
+            if choch_ok:
+                aligned = (
+                    (sweep_dir == "down" and choch_dir == "Bullish") or
+                    (sweep_dir == "up"   and choch_dir == "Bearish")
                 )
+                if not aligned:
+                    # CHoCH exists but misaligned — fall back to BOS
+                    if not bos.get("confirmed"):
+                        return self._no_trade(
+                            pair, price,
+                            f"Sweep ({sweep_dir}) and CHoCH ({choch_dir}) misaligned, no BOS fallback",
+                            reasons
+                        )
+                    decision = "BUY" if sweep_dir == "down" else "SELL"
+                    reasons.append(f"BOS fallback — CHoCH misaligned, BOS confirms {decision}")
+                else:
+                    decision = "BUY" if choch_dir == "Bullish" else "SELL"
+                    reasons.append(f"CHoCH: {choch_dir} — structure shifted, confirms {decision}")
+            elif bos.get("confirmed"):
+                decision = "BUY" if sweep_dir == "down" else "SELL"
+                reasons.append(f"BOS confirmed (no CHoCH) — sweep + BOS confirms {decision}")
+            else:
+                return self._no_trade(pair, price, "No CHoCH or BOS — structure not confirmed", reasons)
 
-            decision = "BUY" if choch_dir == "Bullish" else "SELL"
-            reasons.append(f"CHoCH: {choch_dir} — structure shifted, confirms {decision}")
-
-            # ════════════════════════════════════════════════════════
-            # GATE 5 — Volatility (must not be low)
-            # ════════════════════════════════════════════════════════
+            # Volatility — penalty in score rather than hard gate
             if vol == "Low":
-                return self._no_trade(pair, price, "Volatility too low — no significant movement expected", reasons)
-            reasons.append(f"Volatility: {vol} — sufficient for trade")
+                reasons.append("Volatility: Low — signal weaker, size down")
+            else:
+                reasons.append(f"Volatility: {vol} — sufficient for trade")
 
             # ════════════════════════════════════════════════════════
             # FILTER — Funding & Sentiment (probability booster)

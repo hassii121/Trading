@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 # Score thresholds
 SCORE_HIGH   = 80
 SCORE_GOOD   = 60
-SCORE_WEAK   = 40
+SCORE_WEAK   = 30
 
 # Risk % per confidence band
 RISK_HIGH    = 1.5
@@ -180,8 +180,8 @@ class Engine5:
         else:
             s["sentiment"] = 0
 
-        # Volatility
-        s["volatility"] = 10 if vol == "High" else 5 if vol == "Medium" else 0
+        # Volatility (Low now penalises instead of killing the signal)
+        s["volatility"] = 10 if vol == "High" else 5 if vol == "Medium" else -10
 
         # Manipulation bonus (sweep → CHoCH = smart money confirmed)
         s["manipulation"] = 5 if manip else 0
