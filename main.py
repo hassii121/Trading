@@ -420,6 +420,32 @@ def api_open_trades():
 def api_trading_history():
     return jsonify(trader_db.get_closed_trades())
 
+@app.route("/api/debug/settings")
+@login_required
+def api_debug_settings():
+    import os
+    keys = ["enabled","testnet","min_confidence","max_trades","leverage",
+            "risk_pct","trade_tp_usd","basket_tp_usd",
+            "api_key","api_secret","tn_api_key","tn_api_secret"]
+    result = {}
+    for k in keys:
+        db_val  = None
+        conn = trader_db.get_conn()
+        row  = conn.execute("SELECT value FROM trading_settings WHERE key=?", (k,)).fetchone()
+        conn.close()
+        if row and row["value"]:
+            db_val = "SET (DB)"
+        env_var = trader_db._ENV_FALLBACKS.get(k)
+        env_val = os.environ.get(env_var) if env_var else None
+        result[k] = {
+            "source":  "DB" if db_val else ("ENV" if env_val else "DEFAULT"),
+            "db":      "set" if db_val else "empty",
+            "env":     "set" if env_val else "not set",
+            "active":  "****" if k in ("api_key","api_secret","tn_api_key","tn_api_secret")
+                       else trader_db.get_setting(k),
+        }
+    return jsonify(result)
+
 
 # ── Start ─────────────────────────────────────────────────────────────────────
 
