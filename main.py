@@ -2,8 +2,9 @@
 main.py — HASSII Institute entry point.
 Starts Flask + SocketIO server. Open http://localhost:5050 in browser.
 """
-from flask import Flask, render_template, request, jsonify
-from flask_socketio import SocketIO, emit
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask_socketio import SocketIO, emit, disconnect
+from functools import wraps
 import threading, logging, time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -22,8 +23,18 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 log = logging.getLogger(__name__)
 
 
-app      = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+app          = Flask(__name__)
+app.secret_key = cfg.SECRET_KEY
+socketio     = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("authenticated"):
+            return redirect(url_for("login_page"))
+        return f(*args, **kwargs)
+    return decorated
 
 # Shared Binance client (public market data — no auth required for candles)
 try:
@@ -52,7 +63,25 @@ _current_tf: str = "30m"
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
+@app.route("/login", methods=["GET", "POST"])
+def login_page():
+    if session.get("authenticated"):
+        return redirect(url_for("index"))
+    error = None
+    if request.method == "POST":
+        if request.form.get("password") == cfg.PASSWORD:
+            session["authenticated"] = True
+            return redirect(url_for("index"))
+        error = "Incorrect password — try again"
+    return render_template("login.html", error=error)
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login_page"))
+
 @app.route("/")
+@login_required
 def index():
     return render_template("dashboard.html", pairs=cfg.PAIRS)
 
@@ -61,6 +90,9 @@ def index():
 
 @socketio.on("connect")
 def on_connect():
+    if not session.get("authenticated"):
+        disconnect()
+        return
     for payload in _latest.values():
         emit("signal", payload)
 
@@ -277,6 +309,7 @@ def _flatten_e2(e2: dict) -> dict:
 # ── Trading Settings ──────────────────────────────────────────────────────────
 
 @app.route("/api/trading/settings", methods=["GET"])
+@login_required
 def api_get_trading_settings():
     return jsonify({
         "enabled":           trader_db.get_setting("enabled",        "0") == "1",
@@ -294,6 +327,7 @@ def api_get_trading_settings():
     })
 
 @app.route("/api/trading/settings", methods=["POST"])
+@login_required
 def api_save_trading_settings():
     data = request.json
     if data.get("api_key")        and "****" not in data["api_key"]:
@@ -318,14 +352,17 @@ def api_save_trading_settings():
 # ── Trading Account ───────────────────────────────────────────────────────────
 
 @app.route("/api/trading/account")
+@login_required
 def api_trading_account():
     return jsonify(auto_trader.get_account_info())
 
 @app.route("/api/trading/open")
+@login_required
 def api_open_trades():
     return jsonify(trader_db.get_open_trades())
 
 @app.route("/api/trading/history")
+@login_required
 def api_trading_history():
     return jsonify(trader_db.get_closed_trades())
 

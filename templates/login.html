@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>HASSII Institute — Login</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0a0d12;
+      --bg2:     #0f1319;
+      --bg3:     #151b24;
+      --border:  #1e2a38;
+      --border2: #253040;
+      --text:    #cdd6e0;
+      --text2:   #6b7f93;
+      --accent:  #00b4d8;
+      --accent2: #0077b6;
+      --green:   #00e676;
+      --red:     #ff4d6d;
+      --gold:    #ffd166;
+      --font:    'Courier New', 'Consolas', monospace;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      overflow: hidden;
+    }
+
+    /* ── Animated grid background ── */
+    .grid-bg {
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,180,216,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,180,216,0.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+      animation: gridPan 20s linear infinite;
+      pointer-events: none;
+    }
+
+    @keyframes gridPan {
+      0%   { background-position: 0 0; }
+      100% { background-position: 40px 40px; }
+    }
+
+    /* ── Radial glow ── */
+    .glow {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 700px;
+      height: 700px;
+      background: radial-gradient(ellipse at center,
+        rgba(0,180,216,0.07) 0%,
+        transparent 70%);
+      pointer-events: none;
+    }
+
+    /* ── Center container ── */
+    .center {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      gap: 0;
+    }
+
+    /* ── Logo / branding ── */
+    .brand {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+
+    .hex-icon {
+      font-size: 52px;
+      color: var(--accent);
+      display: block;
+      margin-bottom: 20px;
+      animation: float 4s ease-in-out infinite;
+      filter: drop-shadow(0 0 20px rgba(0,180,216,0.5));
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50%       { transform: translateY(-8px); }
+    }
+
+    .brand-title {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: 6px;
+      color: var(--accent);
+      text-transform: uppercase;
+      text-shadow: 0 0 30px rgba(0,180,216,0.4);
+    }
+
+    .brand-sub {
+      font-size: 11px;
+      letter-spacing: 4px;
+      color: var(--text2);
+      text-transform: uppercase;
+      margin-top: 10px;
+    }
+
+    .brand-divider {
+      width: 60px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      margin: 20px auto 0;
+    }
+
+    /* ── Login card ── */
+    .login-card {
+      background: var(--bg2);
+      border: 1px solid var(--border2);
+      border-radius: 10px;
+      padding: 40px 48px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow:
+        0 0 0 1px rgba(0,180,216,0.05),
+        0 24px 60px rgba(0,0,0,0.6),
+        0 0 40px rgba(0,180,216,0.04);
+    }
+
+    .card-label {
+      font-size: 9px;
+      letter-spacing: 4px;
+      color: var(--text2);
+      text-transform: uppercase;
+      text-align: center;
+      margin-bottom: 28px;
+    }
+
+    .input-wrap {
+      position: relative;
+      margin-bottom: 20px;
+    }
+
+    .input-wrap .lock-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 14px;
+      color: var(--text2);
+      pointer-events: none;
+    }
+
+    .pwd-input {
+      width: 100%;
+      background: var(--bg3);
+      border: 1px solid var(--border2);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      letter-spacing: 3px;
+      padding: 14px 16px 14px 42px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .pwd-input::placeholder {
+      letter-spacing: 1px;
+      color: var(--text2);
+      font-size: 12px;
+    }
+
+    .pwd-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(0,180,216,0.1);
+    }
+
+    .login-btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, rgba(0,180,216,0.15), rgba(0,119,182,0.15));
+      border: 1px solid var(--accent);
+      border-radius: 6px;
+      color: var(--accent);
+      font-family: var(--font);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .login-btn:hover {
+      background: linear-gradient(135deg, rgba(0,180,216,0.25), rgba(0,119,182,0.25));
+      box-shadow: 0 0 20px rgba(0,180,216,0.2);
+    }
+
+    .login-btn:active {
+      transform: scale(0.98);
+    }
+
+    /* ── Error message ── */
+    .error-msg {
+      background: rgba(255,77,109,0.1);
+      border: 1px solid rgba(255,77,109,0.3);
+      border-radius: 6px;
+      color: var(--red);
+      font-size: 11px;
+      letter-spacing: 1px;
+      text-align: center;
+      padding: 10px 14px;
+      margin-bottom: 18px;
+      animation: shake 0.3s ease;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25%       { transform: translateX(-6px); }
+      75%       { transform: translateX(6px); }
+    }
+
+    /* ── Footer ── */
+    .footer-text {
+      margin-top: 32px;
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: var(--border2);
+      text-transform: uppercase;
+      text-align: center;
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { display: none; }
+  </style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+<div class="glow"></div>
+
+<div class="center">
+
+  <div class="brand">
+    <span class="hex-icon">⬡</span>
+    <div class="brand-title">HASSII Institute</div>
+    <div class="brand-sub">Institutional Market Analysis</div>
+    <div class="brand-divider"></div>
+  </div>
+
+  <div class="login-card">
+    <div class="card-label">Secure Access Required</div>
+
+    {% if error %}
+    <div class="error-msg">⚠ {{ error }}</div>
+    {% endif %}
+
+    <form method="POST" action="/login">
+      <div class="input-wrap">
+        <span class="lock-icon">⬡</span>
+        <input class="pwd-input" type="password" name="password"
+               placeholder="Enter password" autofocus autocomplete="off"/>
+      </div>
+      <button class="login-btn" type="submit">Enter Dashboard</button>
+    </form>
+  </div>
+
+  <div class="footer-text">⬡ &nbsp; Restricted Access &nbsp; ⬡</div>
+
+</div>
+
+</body>
+</html>

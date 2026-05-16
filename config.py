@@ -31,8 +31,10 @@ class Config:
     CANDLE_LIMIT: int = 200
 
     # ── Web server ────────────────────────────────────────────────────
-    HOST: str = field(default_factory=lambda: os.getenv("HOST", "0.0.0.0"))
-    PORT: int = field(default_factory=lambda: int(os.getenv("PORT", "5050")))
+    HOST:       str = field(default_factory=lambda: os.getenv("HOST", "0.0.0.0"))
+    PORT:       int = field(default_factory=lambda: int(os.getenv("PORT", "5050")))
+    SECRET_KEY: str = field(default_factory=lambda: os.getenv("SECRET_KEY", "hassii-secret-2024"))
+    PASSWORD:   str = field(default_factory=lambda: os.getenv("DASHBOARD_PASSWORD", "hassii2024"))
 
     # ── Analysis refresh ─────────────────────────────────────────────
     REFRESH_SECONDS: int = 30   # how often all engines re-run
