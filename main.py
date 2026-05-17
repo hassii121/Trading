@@ -198,6 +198,9 @@ def login_page():
 
 @app.route("/register", methods=["GET", "POST"])
 def register_page():
+    # Only accessible when no users exist (first-time setup after DB wipe)
+    if trader_db.get_user_count() > 0:
+        return redirect(url_for("login_page"))
     if session.get("user_id"):
         return redirect(url_for("index"))
     error = None
