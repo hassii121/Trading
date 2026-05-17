@@ -74,13 +74,24 @@ def _np_verify_ipn(payload: dict, sig: str) -> bool:
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not session.get("user_id"):
+        uid = session.get("user_id")
+        if not uid:
             if request.path.startswith("/api/"):
                 return jsonify({"error": "Not authenticated"}), 401
             return redirect(url_for("login_page"))
+        # Validate the session against the DB — catches stale cookies after DB wipe
+        user = trader_db.get_user_by_id(uid)
+        if not user:
+            session.clear()
+            if request.path.startswith("/api/"):
+                return jsonify({"error": "Not authenticated"}), 401
+            return redirect(url_for("login_page"))
+        # Keep session role in sync with DB
+        if session.get("role") != user["role"]:
+            session["role"] = user["role"]
         # Subscription gate — admins bypass
-        if session.get("role") != "admin":
-            if not trader_db.has_active_subscription(session["user_id"]):
+        if user["role"] != "admin":
+            if not trader_db.has_active_subscription(uid):
                 if request.path.startswith("/api/"):
                     return jsonify({"error": "No active subscription"}), 403
                 return redirect(url_for("subscribe_page"))
@@ -225,11 +236,16 @@ def logout():
 
 @app.route("/subscribe")
 def subscribe_page():
-    if not session.get("user_id"):
+    uid = session.get("user_id")
+    if not uid:
         return redirect(url_for("login_page"))
-    if session.get("role") == "admin" or trader_db.has_active_subscription(session["user_id"]):
+    user = trader_db.get_user_by_id(uid)
+    if not user:
+        session.clear()
+        return redirect(url_for("login_page"))
+    if user["role"] == "admin" or trader_db.has_active_subscription(uid):
         return redirect(url_for("index"))
-    sub = trader_db.get_user_subscription(session["user_id"])
+    sub = trader_db.get_user_subscription(uid)
     return render_template("subscribe.html", plans=PLANS, pending=sub)
 
 @app.route("/subscribe/<plan_key>", methods=["POST"])
