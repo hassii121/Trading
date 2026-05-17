@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>HASSII Institute — Admin</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0d12; --bg2: #0f1319; --bg3: #151b24;
+      --border: #1e2a38; --border2: #253040;
+      --text: #cdd6e0; --text2: #6b7f93;
+      --accent: #00b4d8; --green: #00e676; --red: #ff4d6d; --gold: #ffd166;
+      --font: 'Courier New', 'Consolas', monospace;
+    }
+    html, body { min-height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); }
+    .topbar { display: flex; align-items: center; justify-content: space-between; padding: 16px 32px; border-bottom: 1px solid var(--border2); background: var(--bg2); }
+    .topbar-title { font-size: 14px; letter-spacing: 4px; color: var(--accent); text-transform: uppercase; }
+    .topbar-nav a { color: var(--text2); text-decoration: none; font-size: 11px; letter-spacing: 2px; margin-left: 24px; text-transform: uppercase; }
+    .topbar-nav a:hover { color: var(--accent); }
+    .topbar-nav a.danger { color: var(--red); }
+    .container { max-width: 1100px; margin: 40px auto; padding: 0 24px; }
+    h2 { font-size: 13px; letter-spacing: 4px; color: var(--accent); text-transform: uppercase; margin-bottom: 24px; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 36px; }
+    .stat-card { background: var(--bg2); border: 1px solid var(--border2); border-radius: 8px; padding: 20px 24px; text-align: center; }
+    .stat-val { font-size: 28px; color: var(--accent); font-weight: 700; }
+    .stat-label { font-size: 9px; letter-spacing: 3px; color: var(--text2); text-transform: uppercase; margin-top: 6px; }
+    .section { background: var(--bg2); border: 1px solid var(--border2); border-radius: 8px; padding: 24px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { font-size: 9px; letter-spacing: 3px; color: var(--text2); text-transform: uppercase; padding: 10px 12px; border-bottom: 1px solid var(--border2); text-align: left; }
+    td { padding: 12px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 4px; font-size: 9px; letter-spacing: 2px; text-transform: uppercase; font-weight: 700; }
+    .badge-admin { background: rgba(255,209,102,0.15); color: var(--gold); border: 1px solid rgba(255,209,102,0.3); }
+    .badge-user  { background: rgba(0,180,216,0.1);  color: var(--accent); border: 1px solid rgba(0,180,216,0.2); }
+    .badge-active   { background: rgba(0,230,118,0.1); color: var(--green); border: 1px solid rgba(0,230,118,0.2); }
+    .badge-inactive { background: rgba(255,77,109,0.1); color: var(--red);  border: 1px solid rgba(255,77,109,0.2); }
+    .btn { display: inline-block; padding: 5px 14px; border-radius: 4px; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; border: none; font-family: var(--font); }
+    .btn-warn  { background: rgba(255,209,102,0.15); color: var(--gold);  border: 1px solid rgba(255,209,102,0.3); }
+    .btn-danger { background: rgba(255,77,109,0.1); color: var(--red); border: 1px solid rgba(255,77,109,0.3); }
+    .btn:hover { opacity: 0.8; }
+    .no-data { text-align: center; color: var(--text2); padding: 32px; font-size: 12px; letter-spacing: 2px; }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-title">⬡ Admin Panel</div>
+  <div class="topbar-nav">
+    <a href="/">Dashboard</a>
+    <a href="/logout" class="danger">Logout</a>
+  </div>
+</div>
+
+<div class="container">
+  <div class="stats">
+    <div class="stat-card">
+      <div class="stat-val">{{ users|length }}</div>
+      <div class="stat-label">Total Users</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" style="color:var(--green)">{{ users|selectattr('is_active','equalto',1)|list|length }}</div>
+      <div class="stat-label">Active Users</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" style="color:var(--gold)">{{ users|selectattr('role','equalto','admin')|list|length }}</div>
+      <div class="stat-label">Admins</div>
+    </div>
+  </div>
+
+  <h2>User Management</h2>
+  <div class="section">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th><th>Username</th><th>Email</th><th>Role</th>
+          <th>Status</th><th>Registered</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td style="color:var(--text2)">#{{ u.id }}</td>
+          <td>{{ u.username }}</td>
+          <td style="color:var(--text2)">{{ u.email }}</td>
+          <td><span class="badge badge-{{ u.role }}">{{ u.role }}</span></td>
+          <td><span class="badge badge-{{ 'active' if u.is_active else 'inactive' }}">{{ 'Active' if u.is_active else 'Inactive' }}</span></td>
+          <td style="color:var(--text2)">{{ u.created_at[:10] if u.created_at else '—' }}</td>
+          <td>
+            <form method="POST" action="/admin/toggle_user/{{ u.id }}" style="display:inline">
+              <button class="btn btn-warn" type="submit">{{ 'Disable' if u.is_active else 'Enable' }}</button>
+            </form>
+            <form method="POST" action="/admin/delete_user/{{ u.id }}" style="display:inline" onsubmit="return confirm('Delete {{ u.username }}?')">
+              <button class="btn btn-danger" type="submit">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="no-data">No users found</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</body>
+</html>

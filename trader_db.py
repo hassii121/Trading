@@ -26,6 +26,15 @@ def get_conn():
 def init_db():
     conn = get_conn()
     conn.executescript("""
+        CREATE TABLE IF NOT EXISTS users (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            email         TEXT UNIQUE NOT NULL,
+            username      TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            role          TEXT DEFAULT 'user',
+            is_active     INTEGER DEFAULT 1,
+            created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
         CREATE TABLE IF NOT EXISTS trading_settings (
             key   TEXT PRIMARY KEY,
             value TEXT
@@ -66,6 +75,51 @@ def init_db():
             closed_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     """)
+    conn.commit()
+    conn.close()
+
+def get_user_count():
+    conn = get_conn()
+    row  = conn.execute("SELECT COUNT(*) as c FROM users").fetchone()
+    conn.close()
+    return row["c"]
+
+def create_user(email, username, password_hash, role="user"):
+    conn = get_conn()
+    conn.execute(
+        "INSERT INTO users (email, username, password_hash, role) VALUES (?,?,?,?)",
+        (email.lower().strip(), username.strip(), password_hash, role)
+    )
+    conn.commit()
+    conn.close()
+
+def get_user_by_email(email):
+    conn = get_conn()
+    row  = conn.execute("SELECT * FROM users WHERE email=?", (email.lower().strip(),)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def get_user_by_id(user_id):
+    conn = get_conn()
+    row  = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def get_all_users():
+    conn = get_conn()
+    rows = conn.execute("SELECT * FROM users ORDER BY created_at DESC").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+def set_user_active(user_id, is_active):
+    conn = get_conn()
+    conn.execute("UPDATE users SET is_active=? WHERE id=?", (1 if is_active else 0, user_id))
+    conn.commit()
+    conn.close()
+
+def delete_user(user_id):
+    conn = get_conn()
+    conn.execute("DELETE FROM users WHERE id=?", (user_id,))
     conn.commit()
     conn.close()
 

@@ -18,6 +18,10 @@
   <div class="header-right">
     <span class="badge live" id="status-badge">● LIVE</span>
     <span class="clock" id="clock">--:--:--</span>
+    {% if session.get('role') == 'admin' %}
+    <a href="/admin" style="color:var(--gold);font-size:11px;letter-spacing:2px;text-decoration:none;margin-left:16px">ADMIN</a>
+    {% endif %}
+    <a href="/logout" style="color:var(--text2);font-size:11px;letter-spacing:2px;text-decoration:none;margin-left:16px">LOGOUT</a>
   </div>
 </header>
 

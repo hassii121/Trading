@@ -2,9 +2,10 @@
 main.py — HASSII Institute entry point.
 Starts Flask + SocketIO server. Open http://localhost:5050 in browser.
 """
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
 from flask_socketio import SocketIO, emit, disconnect
 from functools import wraps
+from werkzeug.security import generate_password_hash, check_password_hash
 import threading, logging, time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -31,8 +32,18 @@ socketio     = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not session.get("authenticated"):
+        if not session.get("user_id"):
             return redirect(url_for("login_page"))
+        return f(*args, **kwargs)
+    return decorated
+
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("user_id"):
+            return redirect(url_for("login_page"))
+        if session.get("role") != "admin":
+            return redirect(url_for("index"))
         return f(*args, **kwargs)
     return decorated
 
@@ -93,20 +104,83 @@ def _refresh_pairs_loop():
 
 @app.route("/login", methods=["GET", "POST"])
 def login_page():
-    if session.get("authenticated"):
+    if session.get("user_id"):
+        return redirect(url_for("index"))
+    # If no users exist yet, redirect to register to create admin
+    if trader_db.get_user_count() == 0:
+        return redirect(url_for("register_page"))
+    error = None
+    if request.method == "POST":
+        email    = request.form.get("email", "").strip()
+        password = request.form.get("password", "")
+        user = trader_db.get_user_by_email(email)
+        if user and check_password_hash(user["password_hash"], password):
+            if not user["is_active"]:
+                error = "Account is disabled — contact admin"
+            else:
+                session["user_id"]  = user["id"]
+                session["username"] = user["username"]
+                session["role"]     = user["role"]
+                return redirect(url_for("index"))
+        else:
+            error = "Invalid email or password"
+    return render_template("login.html", error=error)
+
+@app.route("/register", methods=["GET", "POST"])
+def register_page():
+    if session.get("user_id"):
         return redirect(url_for("index"))
     error = None
     if request.method == "POST":
-        if request.form.get("password") == cfg.PASSWORD:
-            session["authenticated"] = True
+        email    = request.form.get("email", "").strip().lower()
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        confirm  = request.form.get("confirm", "")
+        if not email or not username or not password:
+            error = "All fields are required"
+        elif len(password) < 6:
+            error = "Password must be at least 6 characters"
+        elif password != confirm:
+            error = "Passwords do not match"
+        elif trader_db.get_user_by_email(email):
+            error = "Email already registered"
+        else:
+            # First user becomes admin
+            role = "admin" if trader_db.get_user_count() == 0 else "user"
+            trader_db.create_user(email, username,
+                                  generate_password_hash(password), role)
+            user = trader_db.get_user_by_email(email)
+            session["user_id"]  = user["id"]
+            session["username"] = user["username"]
+            session["role"]     = user["role"]
             return redirect(url_for("index"))
-        error = "Incorrect password — try again"
-    return render_template("login.html", error=error)
+    return render_template("register.html", error=error)
 
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect(url_for("login_page"))
+
+@app.route("/admin")
+@admin_required
+def admin_page():
+    users = trader_db.get_all_users()
+    return render_template("admin.html", users=users)
+
+@app.route("/admin/toggle_user/<int:uid>", methods=["POST"])
+@admin_required
+def admin_toggle_user(uid):
+    user = trader_db.get_user_by_id(uid)
+    if user and user["id"] != session["user_id"]:  # can't disable yourself
+        trader_db.set_user_active(uid, not user["is_active"])
+    return redirect(url_for("admin_page"))
+
+@app.route("/admin/delete_user/<int:uid>", methods=["POST"])
+@admin_required
+def admin_delete_user(uid):
+    if uid != session["user_id"]:  # can't delete yourself
+        trader_db.delete_user(uid)
+    return redirect(url_for("admin_page"))
 
 @app.route("/")
 @login_required
@@ -118,7 +192,7 @@ def index():
 
 @socketio.on("connect")
 def on_connect():
-    if not session.get("authenticated"):
+    if not session.get("user_id"):
         disconnect()
         return
     for payload in _latest.values():

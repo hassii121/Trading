@@ -263,12 +263,20 @@
 
     <form method="POST" action="/login">
       <div class="input-wrap">
+        <span class="lock-icon">@</span>
+        <input class="pwd-input" type="email" name="email"
+               placeholder="Email address" autofocus autocomplete="off"/>
+      </div>
+      <div class="input-wrap">
         <span class="lock-icon">⬡</span>
         <input class="pwd-input" type="password" name="password"
-               placeholder="Enter password" autofocus autocomplete="off"/>
+               placeholder="Password" autocomplete="off"/>
       </div>
       <button class="login-btn" type="submit">Enter Dashboard</button>
     </form>
+    <div style="text-align:center;margin-top:20px;font-size:11px;color:var(--text2)">
+      No account? <a href="/register" style="color:var(--accent);text-decoration:none">Register here</a>
+    </div>
   </div>
 
   <div class="footer-text">⬡ &nbsp; Restricted Access &nbsp; ⬡</div>
