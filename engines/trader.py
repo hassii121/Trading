@@ -79,7 +79,7 @@ class AutoTrader:
             return
 
         active = [(p["symbol"], float(p["positionAmt"]),
-                   round(float(p.get("unRealizedProfit", 0)), 4),
+                   round(float(p.get("unrealizedProfit", 0)), 4),
                    float(p.get("entryPrice", 0)))
                   for p in all_positions if float(p.get("positionAmt", 0)) != 0]
 

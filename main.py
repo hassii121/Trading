@@ -402,7 +402,7 @@ def api_trading_positions():
                 "qty":        abs(amt),
                 "entry_price": float(p.get("entryPrice", 0)),
                 "mark_price":  float(p.get("markPrice",  0)),
-                "unrealized_pnl": round(float(p.get("unRealizedProfit", 0)), 4),
+                "unrealized_pnl": round(float(p.get("unrealizedProfit", 0)), 4),
                 "leverage":    int(p.get("leverage", 1)),
                 "notional":    round(abs(amt) * float(p.get("markPrice", 0)), 2),
             })
