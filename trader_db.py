@@ -22,9 +22,16 @@ _ENV_FALLBACKS = {
 
 
 def _parse_url(url):
-    p = urllib.parse.urlparse(url)
+    url = url.strip().strip('"\'')
+    p   = urllib.parse.urlparse(url)
+    if not p.username:
+        raise ValueError(
+            f"DATABASE_URL could not be parsed (username=None). "
+            f"Raw value starts with: {url[:40]!r}"
+        )
     return dict(host=p.hostname, port=p.port or 5432,
-                database=p.path.lstrip("/"), user=p.username, password=p.password)
+                database=p.path.lstrip("/"), user=p.username,
+                password=p.password, ssl_context=False)
 
 
 def get_conn():
