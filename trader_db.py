@@ -1,8 +1,9 @@
 import os
+import logging
 import urllib.parse
 import pg8000.dbapi
 
-DATABASE_URL = os.environ.get("PG_URL", "") or os.environ.get("DATABASE_URL", "")
+log = logging.getLogger(__name__)
 
 # Environment variable fallbacks — survive Railway redeploys
 _ENV_FALLBACKS = {
@@ -21,21 +22,41 @@ _ENV_FALLBACKS = {
 }
 
 
-def _parse_url(url):
-    url = url.strip().strip('"\'')
-    p   = urllib.parse.urlparse(url)
-    if not p.username:
-        raise ValueError(
-            f"DATABASE_URL could not be parsed (username=None). "
-            f"Raw value starts with: {url[:40]!r}"
-        )
-    return dict(host=p.hostname, port=p.port or 5432,
-                database=p.path.lstrip("/"), user=p.username,
-                password=p.password, ssl_context=False)
-
-
 def get_conn():
-    return pg8000.dbapi.connect(**_parse_url(DATABASE_URL))
+    # 1. Try explicit URL variables first
+    for var in ("PG_URL", "DATABASE_URL", "DATABASE_PRIVATE_URL"):
+        url = os.environ.get(var, "").strip().strip('"\'')
+        if url:
+            p = urllib.parse.urlparse(url)
+            if p.username:
+                log.info("DB: connecting via %s", var)
+                return pg8000.dbapi.connect(
+                    host=p.hostname, port=p.port or 5432,
+                    database=p.path.lstrip("/"), user=p.username,
+                    password=p.password, ssl_context=False
+                )
+
+    # 2. Try individual PG* variables (Railway Postgres plugin auto-injects these)
+    pghost = os.environ.get("PGHOST", "")
+    pguser = os.environ.get("PGUSER", os.environ.get("POSTGRES_USER", ""))
+    pgpass = os.environ.get("PGPASSWORD", os.environ.get("POSTGRES_PASSWORD", ""))
+    pgdb   = os.environ.get("PGDATABASE", os.environ.get("POSTGRES_DB", "railway"))
+    pgport = int(os.environ.get("PGPORT", "5432"))
+
+    if pghost and pguser:
+        log.info("DB: connecting via PGHOST=%s", pghost)
+        return pg8000.dbapi.connect(
+            host=pghost, port=pgport, database=pgdb,
+            user=pguser, password=pgpass, ssl_context=False
+        )
+
+    # 3. Diagnostic — show what DB-related env vars are actually present
+    db_keys = [k for k in os.environ if any(
+        k.startswith(p) for p in ("PG", "DB", "POSTGRES", "DATABASE"))]
+    raise ValueError(
+        f"No PostgreSQL connection info found in environment. "
+        f"DB-related env keys present: {db_keys}"
+    )
 
 
 def _one(cur):
