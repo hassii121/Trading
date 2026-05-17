@@ -1,9 +1,6 @@
-import os
-import logging
-import urllib.parse
-import pg8000.dbapi
+import sqlite3, os
 
-log = logging.getLogger(__name__)
+DB_PATH = os.path.join(os.path.dirname(__file__), "trader.db")
 
 # Environment variable fallbacks — survive Railway redeploys
 _ENV_FALLBACKS = {
@@ -21,118 +18,60 @@ _ENV_FALLBACKS = {
     "basket_tp_usd":  "TRADE_BASKET_TP_USD",
 }
 
-
 def get_conn():
-    # 1. Try explicit URL variables first
-    for var in ("PG_URL", "DATABASE_URL", "DATABASE_PRIVATE_URL"):
-        url = os.environ.get(var, "").strip().strip('"\'')
-        if url:
-            p = urllib.parse.urlparse(url)
-            if p.username:
-                log.info("DB: connecting via %s", var)
-                return pg8000.dbapi.connect(
-                    host=p.hostname, port=p.port or 5432,
-                    database=p.path.lstrip("/"), user=p.username,
-                    password=p.password, ssl_context=False
-                )
-
-    # 2. Try individual PG* variables (Railway Postgres plugin auto-injects these)
-    pghost = os.environ.get("PGHOST", "")
-    pguser = os.environ.get("PGUSER", os.environ.get("POSTGRES_USER", ""))
-    pgpass = os.environ.get("PGPASSWORD", os.environ.get("POSTGRES_PASSWORD", ""))
-    pgdb   = os.environ.get("PGDATABASE", os.environ.get("POSTGRES_DB", "railway"))
-    pgport = int(os.environ.get("PGPORT", "5432"))
-
-    if pghost and pguser:
-        log.info("DB: connecting via PGHOST=%s", pghost)
-        return pg8000.dbapi.connect(
-            host=pghost, port=pgport, database=pgdb,
-            user=pguser, password=pgpass, ssl_context=False
-        )
-
-    # 3. Diagnostic — show what DB-related env vars are actually present
-    db_keys = [k for k in os.environ if any(
-        k.startswith(p) for p in ("PG", "DB", "POSTGRES", "DATABASE"))]
-    raise ValueError(
-        f"No PostgreSQL connection info found in environment. "
-        f"DB-related env keys present: {db_keys}"
-    )
-
-
-def _one(cur):
-    if not cur.description:
-        return None
-    cols = [d[0] for d in cur.description]
-    row  = cur.fetchone()
-    return dict(zip(cols, row)) if row else None
-
-
-def _all(cur):
-    if not cur.description:
-        return []
-    cols = [d[0] for d in cur.description]
-    return [dict(zip(cols, row)) for row in cur.fetchall()]
-
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def init_db():
     conn = get_conn()
-    cur  = conn.cursor()
-    cur.execute("""
+    conn.executescript("""
         CREATE TABLE IF NOT EXISTS trading_settings (
             key   TEXT PRIMARY KEY,
             value TEXT
-        )
-    """)
-    cur.execute("""
+        );
         CREATE TABLE IF NOT EXISTS open_trades (
-            id             SERIAL PRIMARY KEY,
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
             pair           TEXT,
             direction      TEXT,
-            entry_price    DOUBLE PRECISION,
-            sl             DOUBLE PRECISION,
-            tp1            DOUBLE PRECISION,
-            tp2            DOUBLE PRECISION,
-            tp3            DOUBLE PRECISION,
-            qty            DOUBLE PRECISION,
-            notional       DOUBLE PRECISION,
+            entry_price    REAL,
+            sl             REAL,
+            tp1            REAL,
+            tp2            REAL,
+            tp3            REAL,
+            qty            REAL,
+            notional       REAL,
             entry_order_id TEXT,
             sl_order_id    TEXT,
             tp1_order_id   TEXT,
             confidence     INTEGER,
             timeframe      TEXT,
             opened_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    cur.execute("""
+        );
         CREATE TABLE IF NOT EXISTS closed_trades (
-            id             SERIAL PRIMARY KEY,
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
             pair           TEXT,
             direction      TEXT,
-            entry_price    DOUBLE PRECISION,
-            close_price    DOUBLE PRECISION,
-            sl             DOUBLE PRECISION,
-            tp1            DOUBLE PRECISION,
-            qty            DOUBLE PRECISION,
-            notional       DOUBLE PRECISION,
-            pnl            DOUBLE PRECISION,
+            entry_price    REAL,
+            close_price    REAL,
+            sl             REAL,
+            tp1            REAL,
+            qty            REAL,
+            notional       REAL,
+            pnl            REAL,
             close_reason   TEXT,
             confidence     INTEGER,
             timeframe      TEXT,
             opened_at      TIMESTAMP,
             closed_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
+        );
     """)
     conn.commit()
-    cur.close()
     conn.close()
-
 
 def get_setting(key, default=""):
     conn = get_conn()
-    cur  = conn.cursor()
-    cur.execute("SELECT value FROM trading_settings WHERE key=%s", (key,))
-    row = _one(cur)
-    cur.close()
+    row  = conn.execute("SELECT value FROM trading_settings WHERE key=?", (key,)).fetchone()
     conn.close()
     if row and row["value"]:
         return row["value"]
@@ -141,103 +80,72 @@ def get_setting(key, default=""):
         return os.environ.get(env_var, default)
     return default
 
-
 def set_setting(key, value):
     conn = get_conn()
-    cur  = conn.cursor()
-    cur.execute("""
-        INSERT INTO trading_settings (key, value) VALUES (%s, %s)
-        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
-    """, (key, value))
+    conn.execute("INSERT OR REPLACE INTO trading_settings (key, value) VALUES (?,?)", (key, value))
     conn.commit()
-    cur.close()
     conn.close()
-
 
 def add_open_trade(data):
     conn = get_conn()
-    cur  = conn.cursor()
-    cur.execute("""
-        INSERT INTO open_trades
-            (pair, direction, entry_price, sl, tp1, tp2, tp3,
-             qty, notional, entry_order_id, sl_order_id, tp1_order_id,
-             confidence, timeframe)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-        RETURNING id
-    """, (data['pair'], data['direction'], data['entry_price'],
-          data['sl'], data['tp1'], data.get('tp2'), data.get('tp3'),
-          data['qty'], data['notional'],
-          data.get('entry_order_id'), data.get('sl_order_id'), data.get('tp1_order_id'),
-          data.get('confidence'), data.get('timeframe')))
-    trade_id = _one(cur)["id"]
+    c    = conn.cursor()
+    c.execute("""INSERT INTO open_trades
+                 (pair, direction, entry_price, sl, tp1, tp2, tp3,
+                  qty, notional, entry_order_id, sl_order_id, tp1_order_id,
+                  confidence, timeframe)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+              (data['pair'], data['direction'], data['entry_price'],
+               data['sl'], data['tp1'], data.get('tp2'), data.get('tp3'),
+               data['qty'], data['notional'],
+               data.get('entry_order_id'), data.get('sl_order_id'), data.get('tp1_order_id'),
+               data.get('confidence'), data.get('timeframe')))
+    trade_id = c.lastrowid
     conn.commit()
-    cur.close()
     conn.close()
     return trade_id
 
-
 def get_open_trades():
     conn = get_conn()
-    cur  = conn.cursor()
-    cur.execute("SELECT * FROM open_trades ORDER BY opened_at DESC")
-    rows = _all(cur)
-    cur.close()
+    rows = conn.execute("SELECT * FROM open_trades ORDER BY opened_at DESC").fetchall()
     conn.close()
-    return rows
-
+    return [dict(r) for r in rows]
 
 def get_open_trade_by_pair(pair):
     conn = get_conn()
-    cur  = conn.cursor()
-    cur.execute("SELECT * FROM open_trades WHERE pair=%s", (pair,))
-    row = _one(cur)
-    cur.close()
+    row  = conn.execute("SELECT * FROM open_trades WHERE pair=?", (pair,)).fetchone()
     conn.close()
-    return row
-
+    return dict(row) if row else None
 
 def close_trade(trade_id, close_price, pnl, close_reason):
-    conn = get_conn()
-    cur  = conn.cursor()
-    cur.execute("SELECT * FROM open_trades WHERE id=%s", (trade_id,))
-    trade = _one(cur)
+    conn  = get_conn()
+    trade = conn.execute("SELECT * FROM open_trades WHERE id=?", (trade_id,)).fetchone()
     if trade:
-        cur.execute("""
-            INSERT INTO closed_trades
-                (pair, direction, entry_price, close_price, sl, tp1,
-                 qty, notional, pnl, close_reason, confidence, timeframe, opened_at)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-        """, (trade['pair'], trade['direction'], trade['entry_price'], close_price,
-              trade['sl'], trade['tp1'], trade['qty'], trade['notional'],
-              pnl, close_reason, trade['confidence'], trade['timeframe'], trade['opened_at']))
-        cur.execute("DELETE FROM open_trades WHERE id=%s", (trade_id,))
+        conn.execute("""INSERT INTO closed_trades
+                        (pair, direction, entry_price, close_price, sl, tp1,
+                         qty, notional, pnl, close_reason, confidence, timeframe, opened_at)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                     (trade['pair'], trade['direction'], trade['entry_price'], close_price,
+                      trade['sl'], trade['tp1'], trade['qty'], trade['notional'],
+                      pnl, close_reason, trade['confidence'], trade['timeframe'], trade['opened_at']))
+        conn.execute("DELETE FROM open_trades WHERE id=?", (trade_id,))
     conn.commit()
-    cur.close()
     conn.close()
-
 
 def get_closed_trades(limit=100):
     conn = get_conn()
-    cur  = conn.cursor()
-    cur.execute("SELECT * FROM closed_trades ORDER BY closed_at DESC LIMIT %s", (limit,))
-    rows = _all(cur)
-    cur.close()
+    rows = conn.execute("SELECT * FROM closed_trades ORDER BY closed_at DESC LIMIT ?", (limit,)).fetchall()
     conn.close()
-    return rows
-
+    return [dict(r) for r in rows]
 
 def add_closed_trade_direct(data):
     conn = get_conn()
-    cur  = conn.cursor()
-    cur.execute("""
-        INSERT INTO closed_trades
-            (pair, direction, entry_price, close_price, sl, tp1,
-             qty, notional, pnl, close_reason, confidence, timeframe, opened_at)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-    """, (data['pair'], data['direction'], data['entry_price'], data['close_price'],
-          data.get('sl'), data.get('tp1'), data['qty'], data.get('notional'),
-          data['pnl'], data['close_reason'], data.get('confidence'), data.get('timeframe'),
-          data.get('opened_at')))
+    conn.execute("""INSERT INTO closed_trades
+                    (pair, direction, entry_price, close_price, sl, tp1,
+                     qty, notional, pnl, close_reason, confidence, timeframe, opened_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                 (data['pair'], data['direction'], data['entry_price'], data['close_price'],
+                  data.get('sl'), data.get('tp1'), data['qty'], data.get('notional'),
+                  data['pnl'], data['close_reason'], data.get('confidence'), data.get('timeframe'),
+                  data.get('opened_at')))
     conn.commit()
-    cur.close()
     conn.close()
