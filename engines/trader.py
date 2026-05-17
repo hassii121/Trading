@@ -181,7 +181,7 @@ class AutoTrader:
         # Use income history to discover which pairs had recent closures
         # (avoids scanning all 30+ pairs blind)
         try:
-            income = client.futures_income(
+            income = client.futures_income_history(
                 incomeType="REALIZED_PNL", startTime=since_ms, limit=200)
         except Exception as e:
             log.error("AutoTrader sync: income fetch failed: %s", e)
