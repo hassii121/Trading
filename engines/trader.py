@@ -15,6 +15,7 @@ class AutoTrader:
     def __init__(self, socketio):
         self.socketio = socketio
         self._position_cache = {}  # pair -> {direction, entry_price, qty}
+        self._startup_synced = False
         trader_db.init_db()
 
     # ── Public: called from main after every engine run ─────────────────
@@ -68,6 +69,13 @@ class AutoTrader:
         except Exception as e:
             log.error("AutoTrader monitor: client init failed: %s", e)
             return
+
+        # On first successful connection, sync history from Binance fills
+        if not self._startup_synced:
+            self._startup_synced = True
+            import threading
+            threading.Thread(target=self.sync_history_from_binance,
+                             daemon=True).start()
 
         trade_tp_usd  = float(trader_db.get_setting("trade_tp_usd",  "0") or 0)
         basket_tp_usd = float(trader_db.get_setting("basket_tp_usd", "0") or 0)
@@ -154,6 +162,80 @@ class AutoTrader:
                      total_upnl, basket_tp_usd, len(remaining))
             for pair, amt, entry_price in remaining:
                 self._close_position(client, pair, amt, entry_price, "BASKET_TP")
+
+    # ── Public: sync trade history from Binance fills ────────────────────
+
+    def sync_history_from_binance(self, since_hours=48) -> dict:
+        """Scan recent Binance fills to recover trades closed while the bot was offline."""
+        try:
+            client = self._get_client()
+        except Exception as e:
+            return {"error": str(e), "added": 0}
+
+        since_ms = int((time.time() - since_hours * 3600) * 1000)
+
+        # Build dedup set: (pair, pnl rounded to 2dp) already in DB
+        existing = trader_db.get_closed_trades(limit=2000)
+        existing_keys = {(t["pair"], round(float(t["pnl"] or 0), 2)) for t in existing}
+
+        # Use income history to discover which pairs had recent closures
+        # (avoids scanning all 30+ pairs blind)
+        try:
+            income = client.futures_income(
+                incomeType="REALIZED_PNL", startTime=since_ms, limit=200)
+        except Exception as e:
+            log.error("AutoTrader sync: income fetch failed: %s", e)
+            return {"error": str(e), "added": 0}
+
+        pairs_with_pnl = {ev["symbol"] for ev in income if float(ev.get("income", 0)) != 0}
+        log.info("AutoTrader sync: scanning %d pairs for missed closes", len(pairs_with_pnl))
+
+        added = 0
+        for pair in pairs_with_pnl:
+            try:
+                fills = client.futures_account_trades(
+                    symbol=pair, startTime=since_ms, limit=50)
+                for fill in fills:
+                    rpnl = float(fill.get("realizedPnl", 0))
+                    if rpnl == 0:
+                        continue  # entry fill, not a close
+
+                    close_price = float(fill["price"])
+                    qty         = abs(float(fill["qty"]))
+                    side        = fill["side"]
+                    direction   = "BUY" if side == "SELL" else "SELL"
+
+                    key = (pair, round(rpnl, 2))
+                    if key in existing_keys:
+                        continue
+
+                    # Estimate entry from close price + realised PnL
+                    if direction == "BUY":   # long closed with SELL
+                        entry_price = round(close_price - rpnl / qty, 6)
+                    else:                    # short closed with BUY
+                        entry_price = round(close_price + rpnl / qty, 6)
+
+                    trader_db.add_closed_trade_direct({
+                        "pair":        pair,
+                        "direction":   direction,
+                        "entry_price": entry_price,
+                        "close_price": close_price,
+                        "qty":         qty,
+                        "notional":    round(qty * close_price, 2),
+                        "pnl":         round(rpnl, 4),
+                        "close_reason": "TP" if rpnl > 0 else "SL",
+                    })
+                    existing_keys.add(key)
+                    added += 1
+                    log.info("AutoTrader sync: recovered %s | PnL: %.4f", pair, rpnl)
+
+            except Exception as e:
+                log.debug("AutoTrader sync [%s]: %s", pair, e)
+
+        log.info("AutoTrader sync: done — %d records added", added)
+        if added > 0:
+            self.socketio.emit("history_synced", {"added": added})
+        return {"added": added}
 
     # ── Public: account info for dashboard ───────────────────────────────
 

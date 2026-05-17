@@ -425,6 +425,12 @@ def api_open_trades():
 def api_trading_history():
     return jsonify(trader_db.get_closed_trades())
 
+@app.route("/api/trading/sync_history", methods=["POST"])
+@login_required
+def api_sync_history():
+    result = auto_trader.sync_history_from_binance()
+    return jsonify(result)
+
 @app.route("/api/debug/settings")
 @login_required
 def api_debug_settings():

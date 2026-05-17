@@ -636,3 +636,28 @@ socket.on('trade_closed', (data) => {
     loadAccount();
   }
 });
+
+socket.on('history_synced', (data) => {
+  if (data.added > 0) loadAccount();
+});
+
+function syncHistory() {
+  const btn = document.getElementById('sync-btn');
+  if (btn) { btn.textContent = '⟳ SYNCING…'; btn.disabled = true; }
+  fetch('/api/trading/sync_history', { method: 'POST' })
+    .then(r => r.json())
+    .then(d => {
+      if (btn) { btn.textContent = '⟳ SYNC FROM BINANCE'; btn.disabled = false; }
+      if (d.added > 0) {
+        loadAccount();
+        alert(`Synced ${d.added} trade(s) from Binance history.`);
+      } else if (d.error) {
+        alert('Sync error: ' + d.error);
+      } else {
+        alert('Already up to date — no new records found.');
+      }
+    })
+    .catch(() => {
+      if (btn) { btn.textContent = '⟳ SYNC FROM BINANCE'; btn.disabled = false; }
+    });
+}
