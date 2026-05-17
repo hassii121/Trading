@@ -136,3 +136,16 @@ def get_closed_trades(limit=100):
     rows = conn.execute("SELECT * FROM closed_trades ORDER BY closed_at DESC LIMIT ?", (limit,)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+def add_closed_trade_direct(data):
+    conn = get_conn()
+    conn.execute("""INSERT INTO closed_trades
+                    (pair, direction, entry_price, close_price, sl, tp1,
+                     qty, notional, pnl, close_reason, confidence, timeframe, opened_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                 (data['pair'], data['direction'], data['entry_price'], data['close_price'],
+                  data.get('sl'), data.get('tp1'), data['qty'], data.get('notional'),
+                  data['pnl'], data['close_reason'], data.get('confidence'), data.get('timeframe'),
+                  data.get('opened_at')))
+    conn.commit()
+    conn.close()

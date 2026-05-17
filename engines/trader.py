@@ -79,11 +79,11 @@ class AutoTrader:
             return
 
         active = [(p["symbol"], float(p["positionAmt"]),
-                   round(float(p.get("unRealizedProfit", 0)), 4))
+                   round(float(p.get("unRealizedProfit", 0)), 4),
+                   float(p.get("entryPrice", 0)))
                   for p in all_positions if float(p.get("positionAmt", 0)) != 0]
 
         if not active:
-            # Check DB trades that may have been closed on exchange side
             for trade in trader_db.get_open_trades():
                 self._handle_closed(client, trade)
             return
@@ -91,23 +91,23 @@ class AutoTrader:
         total_upnl = 0.0
         remaining  = []
 
-        for pair, amt, upnl in active:
+        for pair, amt, upnl, entry_price in active:
             self.socketio.emit("trade_pnl", {"pair": pair, "unrealized_pnl": upnl})
 
             if trade_tp_usd > 0 and upnl >= trade_tp_usd:
                 log.info("AutoTrader [%s]: per-trade TP hit ($%.2f >= $%.2f) — closing",
                          pair, upnl, trade_tp_usd)
-                self._close_position(client, pair, amt, "TP_USD")
+                self._close_position(client, pair, amt, entry_price, "TP_USD")
             else:
                 total_upnl += upnl
-                remaining.append((pair, amt))
+                remaining.append((pair, amt, entry_price))
 
         # Basket TP — close everything if combined PnL target hit
         if basket_tp_usd > 0 and remaining and total_upnl >= basket_tp_usd:
             log.info("AutoTrader: basket TP hit ($%.2f >= $%.2f) — closing %d positions",
                      total_upnl, basket_tp_usd, len(remaining))
-            for pair, amt in remaining:
-                self._close_position(client, pair, amt, "BASKET_TP")
+            for pair, amt, entry_price in remaining:
+                self._close_position(client, pair, amt, entry_price, "BASKET_TP")
 
     # ── Public: account info for dashboard ───────────────────────────────
 
@@ -235,12 +235,12 @@ class AutoTrader:
 
     # ── Internal: close any live position by pair (works for manual trades too) ──
 
-    def _close_position(self, client, pair: str, pos_amt: float, reason: str):
+    def _close_position(self, client, pair: str, pos_amt: float, entry_price: float, reason: str):
         try:
             qty        = abs(pos_amt)
+            direction  = "BUY" if pos_amt > 0 else "SELL"
             close_side = "SELL" if pos_amt > 0 else "BUY"
 
-            # Cancel all open orders for this pair first
             try:
                 client.futures_cancel_all_open_orders(symbol=pair)
             except Exception:
@@ -252,20 +252,35 @@ class AutoTrader:
             )
 
             fills       = client.futures_account_trades(symbol=pair, limit=5)
-            close_price = float(fills[-1]["price"]) if fills else 0
+            close_price = float(fills[-1]["price"]) if fills else entry_price
 
-            # If bot opened this trade, clean up DB record
+            pnl = (close_price - entry_price) * qty
+            if direction == "SELL":
+                pnl = -pnl
+            pnl = round(pnl, 4)
+
+            # Bot-opened trade — use existing DB close flow
             db_trade = trader_db.get_open_trade_by_pair(pair)
             if db_trade:
-                pnl = (close_price - db_trade["entry_price"]) * db_trade["qty"]
-                if db_trade["direction"] == "SELL":
-                    pnl = -pnl
-                trader_db.close_trade(db_trade["id"], close_price, round(pnl, 4), reason)
+                trader_db.close_trade(db_trade["id"], close_price, pnl, reason)
+            else:
+                # Manually opened — write directly to closed_trades so history shows it
+                trader_db.add_closed_trade_direct({
+                    "pair":        pair,
+                    "direction":   direction,
+                    "entry_price": entry_price,
+                    "close_price": close_price,
+                    "qty":         qty,
+                    "notional":    round(qty * close_price, 2),
+                    "pnl":         pnl,
+                    "close_reason": reason,
+                })
 
             self.socketio.emit("trade_closed", {
-                "pair": pair, "close_price": close_price, "close_reason": reason,
+                "pair": pair, "close_price": close_price,
+                "close_reason": reason, "pnl": pnl,
             })
-            log.info("AutoTrader [%s]: closed | %s @ %.4f", pair, reason, close_price)
+            log.info("AutoTrader [%s]: closed | %s @ %.4f | PnL: %.4f", pair, reason, close_price, pnl)
 
         except Exception as e:
             log.error("AutoTrader [%s]: _close_position error: %s", pair, e)
