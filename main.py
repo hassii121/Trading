@@ -238,6 +238,27 @@ def logout():
     session.clear()
     return redirect(url_for("login_page"))
 
+@app.route("/auth", methods=["GET", "POST"])
+def auth_direct():
+    """Failsafe login — always shows the form, no redirects, clears any stale session."""
+    session.clear()
+    error = None
+    if request.method == "POST":
+        email    = request.form.get("email", "").strip()
+        password = request.form.get("password", "")
+        user = trader_db.get_user_by_email(email)
+        if user and check_password_hash(user["password_hash"], password):
+            if not user["is_active"]:
+                error = "Account is disabled — contact admin"
+            else:
+                session["user_id"]  = user["id"]
+                session["username"] = user["username"]
+                session["role"]     = user["role"]
+                return redirect(url_for("index"))
+        else:
+            error = "Invalid email or password"
+    return render_template("login.html", error=error)
+
 @app.route("/subscribe")
 def subscribe_page():
     uid = session.get("user_id")
