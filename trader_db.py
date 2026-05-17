@@ -2,7 +2,7 @@ import os
 import urllib.parse
 import pg8000.dbapi
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "")
+DATABASE_URL = os.environ.get("PG_URL", "") or os.environ.get("DATABASE_URL", "")
 
 # Environment variable fallbacks — survive Railway redeploys
 _ENV_FALLBACKS = {
