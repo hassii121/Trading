@@ -79,22 +79,16 @@ def login_required(f):
             if request.path.startswith("/api/"):
                 return jsonify({"error": "Not authenticated"}), 401
             return redirect(url_for("login_page"))
-        # Validate the session against the DB — catches stale cookies after DB wipe
+        # Validate session is still live — clear stale cookies after DB wipe
         user = trader_db.get_user_by_id(uid)
         if not user:
             session.clear()
             if request.path.startswith("/api/"):
                 return jsonify({"error": "Not authenticated"}), 401
             return redirect(url_for("login_page"))
-        # Keep session role in sync with DB
+        # Keep role in sync with DB
         if session.get("role") != user["role"]:
             session["role"] = user["role"]
-        # Subscription gate — admins bypass
-        if user["role"] != "admin":
-            if not trader_db.has_active_subscription(uid):
-                if request.path.startswith("/api/"):
-                    return jsonify({"error": "No active subscription"}), 403
-                return redirect(url_for("subscribe_page"))
         return f(*args, **kwargs)
     return decorated
 
@@ -178,14 +172,9 @@ def _refresh_pairs_loop():
 @app.route("/login", methods=["GET", "POST"])
 def login_page():
     uid = session.get("user_id")
-    if uid:
-        # Validate session is still valid — clear if stale (DB wiped on redeploy)
-        if trader_db.get_user_by_id(uid):
-            return redirect(url_for("index"))
-        session.clear()
-    # If no users exist yet, redirect to register to create admin
-    if trader_db.get_user_count() == 0:
-        return redirect(url_for("register_page"))
+    if uid and trader_db.get_user_by_id(uid):
+        return redirect(url_for("index"))
+    session.clear()
     error = None
     if request.method == "POST":
         email    = request.form.get("email", "").strip()
@@ -201,6 +190,10 @@ def login_page():
                 return redirect(url_for("index"))
         else:
             error = "Invalid email or password"
+    else:
+        # Only redirect to register on fresh GET when no users exist
+        if trader_db.get_user_count() == 0:
+            return redirect(url_for("register_page"))
     return render_template("login.html", error=error)
 
 @app.route("/register", methods=["GET", "POST"])
