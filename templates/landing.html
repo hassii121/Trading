@@ -7,487 +7,550 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg:      #07090d;
-      --bg2:     #0c1018;
-      --bg3:     #111822;
-      --border:  #1a2535;
-      --border2: #1e2e42;
-      --text:    #c8d6e5;
-      --text2:   #5f7a96;
-      --text3:   #3d5168;
-      --accent:  #00b4d8;
-      --accent2: #0077b6;
-      --green:   #00e676;
-      --gold:    #ffd166;
-      --red:     #ff4d6d;
-      --font:    'Courier New', 'Consolas', monospace;
+      --bg:     #04060a;
+      --bg2:    #080c14;
+      --bg3:    #0d1420;
+      --cyan:   #00d4ff;
+      --cyan2:  #0096c7;
+      --blue:   #0044ff;
+      --green:  #00ff88;
+      --gold:   #ffcc00;
+      --red:    #ff3355;
+      --text:   #e0eaf5;
+      --text2:  #5a7a9a;
+      --border: #0e1d2e;
+      --font:   'Courier New', 'Consolas', monospace;
     }
-
     html { scroll-behavior: smooth; }
     body { background: var(--bg); color: var(--text); font-family: var(--font); overflow-x: hidden; }
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-thumb { background: #1a3a5a; }
 
-    /* ── Scrollbar ── */
-    ::-webkit-scrollbar { width: 4px; }
-    ::-webkit-scrollbar-track { background: var(--bg); }
-    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
-
-    /* ── Grid overlay ── */
-    .grid-bg {
-      position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    /* ── Animated background ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 80% 60% at 20% 10%, rgba(0,212,255,0.06) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 80% 80%, rgba(0,68,255,0.05) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 40% at 50% 50%, rgba(0,212,255,0.03) 0%, transparent 70%);
+    }
+    .grid {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
       background-image:
-        linear-gradient(rgba(0,180,216,0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0,180,216,0.03) 1px, transparent 1px);
-      background-size: 60px 60px;
+        linear-gradient(rgba(0,212,255,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,0.04) 1px, transparent 1px);
+      background-size: 50px 50px;
     }
 
-    /* ═══════════════════════════════════════════
-       NAV
-    ═══════════════════════════════════════════ */
+    /* ════════════════ NAV ════════════════ */
     nav {
-      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      position: fixed; top: 0; left: 0; right: 0; z-index: 200;
       display: flex; align-items: center; justify-content: space-between;
-      padding: 0 48px; height: 64px;
-      background: rgba(7,9,13,0.85);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border);
+      padding: 0 56px; height: 68px;
+      background: rgba(4,6,10,0.9);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(0,212,255,0.1);
     }
-    .nav-logo {
-      display: flex; align-items: center; gap: 10px;
-      font-size: 13px; font-weight: 700; letter-spacing: 4px;
-      color: var(--accent); text-decoration: none; text-transform: uppercase;
+    .logo {
+      display: flex; align-items: center; gap: 12px;
+      text-decoration: none;
     }
-    .nav-logo .hex { font-size: 20px; filter: drop-shadow(0 0 10px rgba(0,180,216,0.6)); }
-    .nav-links { display: flex; gap: 32px; }
-    .nav-links a {
-      color: var(--text2); text-decoration: none; font-size: 10px;
-      letter-spacing: 2px; text-transform: uppercase; transition: color 0.2s;
+    .logo-hex {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, rgba(0,212,255,0.2), rgba(0,68,255,0.2));
+      border: 1px solid rgba(0,212,255,0.5);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      box-shadow: 0 0 20px rgba(0,212,255,0.2), inset 0 0 20px rgba(0,212,255,0.05);
     }
-    .nav-links a:hover { color: var(--accent); }
-    .nav-actions { display: flex; gap: 12px; }
-    .btn-outline {
-      padding: 9px 22px; border: 1px solid var(--border2); border-radius: 5px;
-      color: var(--text2); font-family: var(--font); font-size: 10px;
-      letter-spacing: 2px; text-transform: uppercase; text-decoration: none;
-      transition: all 0.2s; cursor: pointer; background: transparent;
+    .logo-text { font-size: 12px; font-weight: 700; letter-spacing: 5px; color: var(--cyan); text-transform: uppercase; }
+    .nav-links { display: flex; gap: 36px; }
+    .nav-links a { color: var(--text2); text-decoration: none; font-size: 9px; letter-spacing: 3px; text-transform: uppercase; transition: color 0.2s; }
+    .nav-links a:hover { color: var(--cyan); }
+    .nav-btns { display: flex; gap: 10px; }
+    .btn-ghost {
+      padding: 9px 24px; border: 1px solid rgba(0,212,255,0.25);
+      border-radius: 4px; color: var(--cyan); background: transparent;
+      font-family: var(--font); font-size: 9px; letter-spacing: 3px;
+      text-transform: uppercase; text-decoration: none; transition: all 0.2s;
     }
-    .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
-    .btn-primary {
-      padding: 9px 22px; border: 1px solid var(--accent); border-radius: 5px;
-      color: var(--bg); background: var(--accent); font-family: var(--font);
-      font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
-      text-decoration: none; transition: all 0.2s; cursor: pointer; font-weight: 700;
+    .btn-ghost:hover { border-color: var(--cyan); background: rgba(0,212,255,0.08); }
+    .btn-solid {
+      padding: 9px 24px;
+      background: linear-gradient(135deg, var(--cyan), var(--cyan2));
+      border: none; border-radius: 4px;
+      color: #04060a; font-family: var(--font); font-size: 9px; font-weight: 700;
+      letter-spacing: 3px; text-transform: uppercase; text-decoration: none;
+      transition: all 0.2s; cursor: pointer;
+      box-shadow: 0 0 24px rgba(0,212,255,0.3);
     }
-    .btn-primary:hover { background: #00caf5; border-color: #00caf5; }
+    .btn-solid:hover { box-shadow: 0 0 40px rgba(0,212,255,0.5); transform: translateY(-1px); }
 
-    /* ═══════════════════════════════════════════
-       HERO
-    ═══════════════════════════════════════════ */
+    /* ════════════════ HERO ════════════════ */
     .hero {
       position: relative; z-index: 10;
       min-height: 100vh;
-      display: flex; align-items: center; justify-content: center;
-      text-align: center; padding: 120px 24px 80px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; padding: 140px 24px 60px;
     }
-    .hero-glow {
-      position: absolute; top: 40%; left: 50%; transform: translate(-50%,-50%);
-      width: 800px; height: 600px; pointer-events: none;
-      background: radial-gradient(ellipse at center,
-        rgba(0,180,216,0.08) 0%, transparent 65%);
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 8px 20px; margin-bottom: 40px;
+      border: 1px solid rgba(0,212,255,0.3);
+      border-radius: 24px; background: rgba(0,212,255,0.06);
+      font-size: 9px; letter-spacing: 3px; color: var(--cyan); text-transform: uppercase;
     }
-    .hero-inner { position: relative; max-width: 820px; }
-    .hero-tag {
-      display: inline-block; padding: 6px 18px;
-      border: 1px solid rgba(0,180,216,0.3); border-radius: 20px;
-      font-size: 9px; letter-spacing: 3px; color: var(--accent);
-      text-transform: uppercase; margin-bottom: 36px;
-      background: rgba(0,180,216,0.06);
-    }
+    .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse-dot 2s ease-in-out infinite; }
+    @keyframes pulse-dot { 0%,100%{box-shadow:0 0 0 0 rgba(0,255,136,0.4)} 50%{box-shadow:0 0 0 6px rgba(0,255,136,0)} }
+
     .hero h1 {
-      font-size: clamp(28px, 5vw, 52px);
-      font-weight: 700; letter-spacing: 2px; line-height: 1.15;
-      color: #fff; margin-bottom: 24px;
+      font-size: clamp(32px, 6vw, 72px);
+      font-weight: 700; letter-spacing: -1px; line-height: 1.08;
+      margin-bottom: 28px;
+      background: linear-gradient(135deg, #ffffff 0%, var(--cyan) 50%, #6ee7ff 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
-    .hero h1 span { color: var(--accent); }
+    .hero h1 em { font-style: normal; color: var(--cyan); -webkit-text-fill-color: var(--cyan); }
     .hero-sub {
-      font-size: 13px; letter-spacing: 1px; color: var(--text2);
-      line-height: 1.8; max-width: 580px; margin: 0 auto 48px;
+      font-size: 14px; color: var(--text2); letter-spacing: 1px;
+      line-height: 1.9; max-width: 600px; margin-bottom: 52px;
     }
-    .hero-actions { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
-    .hero-btn-primary {
-      padding: 15px 40px; background: var(--accent); border: none; border-radius: 6px;
-      color: var(--bg); font-family: var(--font); font-size: 11px; font-weight: 700;
+    .hero-btns { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin-bottom: 80px; }
+    .hero-cta {
+      padding: 17px 48px;
+      background: linear-gradient(135deg, var(--cyan), var(--cyan2));
+      border: none; border-radius: 6px; color: #04060a;
+      font-family: var(--font); font-size: 11px; font-weight: 700;
       letter-spacing: 3px; text-transform: uppercase; text-decoration: none;
-      cursor: pointer; transition: all 0.2s;
+      transition: all 0.25s; cursor: pointer;
+      box-shadow: 0 0 40px rgba(0,212,255,0.35), 0 8px 32px rgba(0,0,0,0.4);
     }
-    .hero-btn-primary:hover { background: #00caf5; transform: translateY(-1px); }
-    .hero-btn-outline {
-      padding: 15px 40px; background: transparent;
-      border: 1px solid var(--border2); border-radius: 6px;
+    .hero-cta:hover { box-shadow: 0 0 60px rgba(0,212,255,0.55), 0 8px 32px rgba(0,0,0,0.4); transform: translateY(-2px); }
+    .hero-sec {
+      padding: 17px 48px; background: transparent;
+      border: 1px solid rgba(0,212,255,0.2); border-radius: 6px;
       color: var(--text2); font-family: var(--font); font-size: 11px;
       letter-spacing: 3px; text-transform: uppercase; text-decoration: none;
-      cursor: pointer; transition: all 0.2s;
+      transition: all 0.25s;
     }
-    .hero-btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+    .hero-sec:hover { border-color: var(--cyan); color: var(--cyan); }
 
-    /* Stats bar */
-    .stats-bar {
+    /* ticker strip */
+    .ticker {
+      width: 100%; overflow: hidden;
+      border-top: 1px solid rgba(0,212,255,0.1);
+      border-bottom: 1px solid rgba(0,212,255,0.1);
+      background: rgba(0,212,255,0.03);
+      padding: 12px 0;
+    }
+    .ticker-inner { display: flex; gap: 56px; animation: ticker 30s linear infinite; white-space: nowrap; }
+    @keyframes ticker { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+    .tick { display: flex; align-items: center; gap: 10px; font-size: 10px; letter-spacing: 2px; }
+    .tick-pair { color: var(--cyan); }
+    .tick-up { color: var(--green); }
+    .tick-dn { color: var(--red); }
+
+    /* ════════════════ STATS ════════════════ */
+    .stats {
       position: relative; z-index: 10;
-      display: flex; justify-content: center; flex-wrap: wrap; gap: 0;
-      border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
-      background: var(--bg2);
+      display: grid; grid-template-columns: repeat(4,1fr);
+      border-top: 1px solid rgba(0,212,255,0.1);
+      border-bottom: 1px solid rgba(0,212,255,0.1);
     }
-    .stat-item {
-      padding: 28px 48px; text-align: center;
-      border-right: 1px solid var(--border);
+    .s-item {
+      padding: 44px 32px; text-align: center;
+      border-right: 1px solid rgba(0,212,255,0.08);
+      position: relative; overflow: hidden;
+      transition: background 0.3s;
     }
-    .stat-item:last-child { border-right: none; }
-    .stat-val { font-size: 28px; font-weight: 700; color: var(--accent); letter-spacing: 2px; }
-    .stat-val.green { color: var(--green); }
-    .stat-val.gold  { color: var(--gold); }
-    .stat-label { font-size: 8px; letter-spacing: 3px; color: var(--text3); text-transform: uppercase; margin-top: 6px; }
-
-    /* ═══════════════════════════════════════════
-       SECTIONS
-    ═══════════════════════════════════════════ */
-    section { position: relative; z-index: 10; }
-    .section-inner { max-width: 1100px; margin: 0 auto; padding: 100px 32px; }
-    .section-tag {
-      font-size: 9px; letter-spacing: 4px; color: var(--accent);
-      text-transform: uppercase; margin-bottom: 14px;
-    }
-    .section-title {
-      font-size: clamp(20px, 3vw, 32px); font-weight: 700;
-      letter-spacing: 2px; color: #fff; margin-bottom: 16px;
-    }
-    .section-sub {
-      font-size: 12px; letter-spacing: 1px; color: var(--text2);
-      line-height: 1.8; max-width: 520px;
-    }
-    .divider {
-      width: 48px; height: 2px;
-      background: linear-gradient(90deg, var(--accent), transparent);
-      margin: 20px 0 60px;
-    }
-
-    /* ═══════════════════════════════════════════
-       HOW IT WORKS
-    ═══════════════════════════════════════════ */
-    .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 2px; margin-top: 64px; }
-    .step {
-      background: var(--bg2); border: 1px solid var(--border);
-      padding: 36px 28px; position: relative; transition: border-color 0.3s;
-    }
-    .step:hover { border-color: var(--border2); }
-    .step-num {
-      font-size: 10px; letter-spacing: 3px; color: var(--text3);
-      text-transform: uppercase; margin-bottom: 20px;
-    }
-    .step-icon { font-size: 28px; margin-bottom: 16px; display: block; }
-    .step-title { font-size: 13px; letter-spacing: 2px; color: var(--accent); text-transform: uppercase; margin-bottom: 12px; font-weight: 700; }
-    .step-desc { font-size: 11px; letter-spacing: 0.5px; color: var(--text2); line-height: 1.8; }
-    .step-line {
-      position: absolute; top: 0; left: 0; right: 0; height: 2px;
-      background: linear-gradient(90deg, var(--accent), transparent);
+    .s-item:last-child { border-right: none; }
+    .s-item::before {
+      content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+      width: 60%; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--cyan), transparent);
       opacity: 0; transition: opacity 0.3s;
     }
-    .step:hover .step-line { opacity: 1; }
+    .s-item:hover::before { opacity: 1; }
+    .s-item:hover { background: rgba(0,212,255,0.03); }
+    .s-val {
+      font-size: 38px; font-weight: 700; letter-spacing: 2px;
+      background: linear-gradient(135deg, #fff, var(--cyan));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .s-val.g { background: linear-gradient(135deg,#fff,var(--green)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+    .s-val.o { background: linear-gradient(135deg,#fff,var(--gold)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+    .s-label { font-size: 8px; letter-spacing: 4px; color: var(--text2); text-transform: uppercase; margin-top: 8px; }
 
-    /* ═══════════════════════════════════════════
-       FEATURES
-    ═══════════════════════════════════════════ */
-    .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; margin-top: 64px; }
-    .feature-card {
-      background: var(--bg2); border: 1px solid var(--border);
-      border-radius: 8px; padding: 32px 28px;
+    /* ════════════════ HOW IT WORKS ════════════════ */
+    .section { position: relative; z-index: 10; }
+    .s-inner { max-width: 1140px; margin: 0 auto; padding: 110px 32px; }
+    .s-eyebrow { font-size: 9px; letter-spacing: 5px; color: var(--cyan); text-transform: uppercase; margin-bottom: 16px; }
+    .s-heading {
+      font-size: clamp(24px, 4vw, 44px); font-weight: 700; letter-spacing: 1px;
+      color: #fff; margin-bottom: 18px; line-height: 1.15;
+    }
+    .s-heading span { color: var(--cyan); }
+    .s-body { font-size: 12px; color: var(--text2); letter-spacing: 1px; line-height: 1.9; max-width: 500px; }
+    .bar { width: 56px; height: 2px; background: linear-gradient(90deg, var(--cyan), transparent); margin: 28px 0 68px; }
+
+    .steps { display: grid; grid-template-columns: repeat(4,1fr); gap: 1px; }
+    .step {
+      background: var(--bg2); padding: 40px 28px;
+      border: 1px solid var(--border); position: relative;
       transition: border-color 0.3s, transform 0.2s;
+      overflow: hidden;
     }
-    .feature-card:hover { border-color: rgba(0,180,216,0.3); transform: translateY(-2px); }
-    .feature-icon { font-size: 24px; margin-bottom: 20px; display: block; }
-    .feature-title { font-size: 12px; letter-spacing: 3px; color: var(--text); text-transform: uppercase; margin-bottom: 12px; font-weight: 700; }
-    .feature-desc { font-size: 11px; letter-spacing: 0.5px; color: var(--text2); line-height: 1.8; }
-    .feature-tag {
-      display: inline-block; margin-top: 16px; padding: 4px 12px;
-      background: rgba(0,180,216,0.08); border: 1px solid rgba(0,180,216,0.2);
-      border-radius: 3px; font-size: 8px; letter-spacing: 2px;
-      color: var(--accent); text-transform: uppercase;
+    .step::after {
+      content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, var(--cyan), var(--blue));
+      transform: scaleX(0); transform-origin: left; transition: transform 0.3s;
+    }
+    .step:hover::after { transform: scaleX(1); }
+    .step:hover { border-color: rgba(0,212,255,0.2); transform: translateY(-4px); }
+    .step-n {
+      font-size: 48px; font-weight: 700; letter-spacing: -2px;
+      color: rgba(0,212,255,0.08); position: absolute; top: 20px; right: 24px;
+    }
+    .step-ico { font-size: 32px; margin-bottom: 24px; display: block; }
+    .step-t { font-size: 11px; letter-spacing: 3px; color: var(--cyan); text-transform: uppercase; margin-bottom: 14px; font-weight: 700; }
+    .step-d { font-size: 11px; color: var(--text2); line-height: 1.9; letter-spacing: 0.5px; }
+
+    /* ════════════════ FEATURES ════════════════ */
+    .feat-bg { background: var(--bg2); border-top: 1px solid rgba(0,212,255,0.08); border-bottom: 1px solid rgba(0,212,255,0.08); }
+    .feat-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 20px; }
+    .feat-card {
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 10px; padding: 36px 28px;
+      transition: all 0.3s; position: relative; overflow: hidden;
+    }
+    .feat-card::before {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(0,212,255,0.04) 0%, transparent 60%);
+      opacity: 0; transition: opacity 0.3s;
+    }
+    .feat-card:hover::before { opacity: 1; }
+    .feat-card:hover { border-color: rgba(0,212,255,0.25); transform: translateY(-3px); box-shadow: 0 20px 60px rgba(0,0,0,0.4), 0 0 40px rgba(0,212,255,0.05); }
+    .feat-ico { font-size: 28px; margin-bottom: 22px; display: block; }
+    .feat-t { font-size: 11px; letter-spacing: 3px; color: #fff; text-transform: uppercase; margin-bottom: 12px; font-weight: 700; }
+    .feat-d { font-size: 11px; color: var(--text2); line-height: 1.9; }
+    .feat-chip {
+      display: inline-block; margin-top: 18px;
+      padding: 4px 14px; border-radius: 3px;
+      background: rgba(0,212,255,0.08); border: 1px solid rgba(0,212,255,0.2);
+      font-size: 8px; letter-spacing: 2px; color: var(--cyan); text-transform: uppercase;
     }
 
-    /* ═══════════════════════════════════════════
-       LIVE TERMINAL BLOCK
-    ═══════════════════════════════════════════ */
-    .terminal-section { background: var(--bg2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-    .terminal-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; }
-    .terminal-box {
-      background: var(--bg); border: 1px solid var(--border2); border-radius: 8px;
-      overflow: hidden; font-size: 11px;
+    /* ════════════════ TERMINAL ════════════════ */
+    .term-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; }
+    .term-box {
+      background: var(--bg); border: 1px solid rgba(0,212,255,0.15);
+      border-radius: 10px; overflow: hidden;
+      box-shadow: 0 0 80px rgba(0,212,255,0.06), 0 0 0 1px rgba(0,212,255,0.05);
     }
-    .terminal-bar {
-      background: var(--bg3); padding: 10px 16px;
+    .term-bar {
+      background: var(--bg3); padding: 12px 18px;
       display: flex; align-items: center; gap: 8px;
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid rgba(0,212,255,0.1);
     }
-    .t-dot { width: 10px; height: 10px; border-radius: 50%; }
-    .t-dot.r { background: #ff5f57; }
-    .t-dot.y { background: #ffbd2e; }
-    .t-dot.g { background: #28c840; }
-    .terminal-bar-title { font-size: 9px; letter-spacing: 2px; color: var(--text3); margin-left: 6px; text-transform: uppercase; }
-    .terminal-body { padding: 20px; line-height: 2; }
-    .t-line { display: flex; gap: 12px; }
-    .t-time { color: var(--text3); flex-shrink: 0; }
-    .t-buy  { color: var(--green); }
-    .t-sell { color: var(--red); }
-    .t-pair { color: var(--accent); }
-    .t-info { color: var(--text2); }
-    .t-pnl-pos { color: var(--green); }
-    .t-pnl-neg { color: var(--red); }
-    .t-cursor { display: inline-block; width: 8px; height: 14px; background: var(--accent); animation: blink 1s step-end infinite; vertical-align: middle; }
+    .td { width: 11px; height: 11px; border-radius: 50%; }
+    .td.r { background: #ff5f57; }
+    .td.y { background: #ffbd2e; }
+    .td.g { background: #28c840; }
+    .term-title { font-size: 9px; letter-spacing: 3px; color: var(--text2); margin-left: 8px; text-transform: uppercase; }
+    .term-body { padding: 24px 20px; line-height: 2.1; font-size: 11px; }
+    .tl { display: flex; gap: 14px; }
+    .tt { color: rgba(0,212,255,0.3); flex-shrink: 0; }
+    .tb { color: var(--green); font-weight: 700; }
+    .ts { color: var(--red); font-weight: 700; }
+    .tp { color: var(--cyan); }
+    .ti { color: var(--text2); }
+    .tp-pos { color: var(--green); font-weight: 700; }
+    .tp-neg { color: var(--red); }
+    .cur { display: inline-block; width: 8px; height: 14px; background: var(--cyan); animation: blink 1s step-end infinite; vertical-align: middle; box-shadow: 0 0 8px var(--cyan); }
     @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
 
-    /* ═══════════════════════════════════════════
-       CTA
-    ═══════════════════════════════════════════ */
-    .cta-section { text-align: center; }
-    .cta-inner { max-width: 640px; margin: 0 auto; padding: 100px 32px; }
+    /* ════════════════ CTA ════════════════ */
+    .cta-section { position: relative; z-index: 10; text-align: center; }
+    .cta-wrap { max-width: 760px; margin: 0 auto; padding: 110px 32px; }
     .cta-box {
-      background: var(--bg2); border: 1px solid var(--border2);
-      border-radius: 12px; padding: 64px 48px;
       position: relative; overflow: hidden;
+      background: var(--bg2);
+      border: 1px solid rgba(0,212,255,0.2);
+      border-radius: 16px; padding: 72px 56px;
+      box-shadow: 0 0 120px rgba(0,212,255,0.06);
+    }
+    .cta-box::before {
+      content: '';
+      position: absolute; top: -1px; left: 20%; right: 20%; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+    }
+    .cta-box::after {
+      content: '';
+      position: absolute; bottom: -1px; left: 20%; right: 20%; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--cyan2), transparent);
     }
     .cta-glow {
       position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
-      width: 500px; height: 300px; pointer-events: none;
-      background: radial-gradient(ellipse, rgba(0,180,216,0.07) 0%, transparent 70%);
+      width: 600px; height: 400px; pointer-events: none;
+      background: radial-gradient(ellipse, rgba(0,212,255,0.07) 0%, transparent 70%);
     }
-    .cta-title { font-size: clamp(18px, 3vw, 28px); font-weight: 700; letter-spacing: 3px; color: #fff; margin-bottom: 16px; position: relative; }
-    .cta-sub { font-size: 12px; letter-spacing: 1px; color: var(--text2); margin-bottom: 40px; line-height: 1.8; position: relative; }
-    .cta-buttons { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; position: relative; }
+    .cta-label { font-size: 9px; letter-spacing: 5px; color: var(--cyan); text-transform: uppercase; margin-bottom: 20px; position: relative; }
+    .cta-title { font-size: clamp(22px, 4vw, 38px); font-weight: 700; color: #fff; margin-bottom: 16px; position: relative; line-height: 1.2; }
+    .cta-sub { font-size: 12px; color: var(--text2); line-height: 1.9; max-width: 480px; margin: 0 auto 44px; position: relative; }
+    .cta-btns { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; position: relative; }
 
-    /* ═══════════════════════════════════════════
-       FOOTER
-    ═══════════════════════════════════════════ */
+    /* ════════════════ FOOTER ════════════════ */
     footer {
-      border-top: 1px solid var(--border);
-      padding: 32px 48px;
-      display: flex; align-items: center; justify-content: space-between;
-      background: var(--bg2); flex-wrap: wrap; gap: 16px;
+      position: relative; z-index: 10;
+      border-top: 1px solid rgba(0,212,255,0.08);
+      background: var(--bg2);
+      padding: 28px 56px;
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
     }
-    .footer-logo { font-size: 11px; letter-spacing: 4px; color: var(--text3); text-transform: uppercase; }
-    .footer-copy { font-size: 9px; letter-spacing: 2px; color: var(--text3); text-transform: uppercase; }
+    .f-logo { font-size: 10px; letter-spacing: 5px; color: rgba(0,212,255,0.4); text-transform: uppercase; }
+    .f-copy { font-size: 8px; letter-spacing: 3px; color: var(--text2); text-transform: uppercase; }
 
-    /* ═══════════════════════════════════════════
-       RESPONSIVE
-    ═══════════════════════════════════════════ */
-    @media (max-width: 768px) {
+    /* ════════════════ RESPONSIVE ════════════════ */
+    @media (max-width: 900px) {
       nav { padding: 0 20px; }
       .nav-links { display: none; }
-      .stat-item { padding: 20px 24px; }
-      .terminal-wrap { grid-template-columns: 1fr; gap: 32px; }
-      .cta-box { padding: 40px 24px; }
-      footer { flex-direction: column; text-align: center; }
+      .stats { grid-template-columns: repeat(2,1fr); }
+      .steps { grid-template-columns: 1fr 1fr; }
+      .feat-grid { grid-template-columns: 1fr; }
+      .term-grid { grid-template-columns: 1fr; gap: 40px; }
+      .cta-box { padding: 48px 28px; }
+      footer { padding: 24px 20px; flex-direction: column; text-align: center; }
+      .s-inner { padding: 80px 20px; }
+    }
+    @media (max-width: 560px) {
+      .steps { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: 1fr 1fr; }
     }
   </style>
 </head>
 <body>
+<div class="grid"></div>
 
-<div class="grid-bg"></div>
-
-<!-- ═══ NAV ═══ -->
+<!-- NAV -->
 <nav>
-  <a class="nav-logo" href="/">
-    <span class="hex">⬡</span> HASSII Institute
+  <a class="logo" href="/">
+    <div class="logo-hex">⬡</div>
+    <span class="logo-text">HASSII Institute</span>
   </a>
   <div class="nav-links">
-    <a href="#how-it-works">How It Works</a>
+    <a href="#how">How It Works</a>
     <a href="#features">Features</a>
-    <a href="#live">Live System</a>
+    <a href="#live">Live Feed</a>
   </div>
-  <div class="nav-actions">
-    <a class="btn-outline" href="/login">Login</a>
-    <a class="btn-primary" href="/register">Sign Up</a>
+  <div class="nav-btns">
+    <a class="btn-ghost" href="/login">Login</a>
+    <a class="btn-solid" href="/register">Sign Up</a>
   </div>
 </nav>
 
-<!-- ═══ HERO ═══ -->
+<!-- HERO -->
 <div class="hero">
-  <div class="hero-glow"></div>
-  <div class="hero-inner">
-    <div class="hero-tag">⬡ &nbsp; Institutional-Grade Automation &nbsp; ⬡</div>
-    <h1>Fully Automated Trading<br><span>Powered by Institutional Intelligence</span></h1>
-    <p class="hero-sub">
-      HASSII Institute runs a 24/7 multi-engine signal system that analyzes Binance Futures markets,
-      detects high-confidence setups, and executes trades automatically — no manual intervention required.
-    </p>
-    <div class="hero-actions">
-      <a class="hero-btn-primary" href="/register">Get Started Free</a>
-      <a class="hero-btn-outline" href="#how-it-works">See How It Works</a>
+  <div class="hero-badge">
+    <div class="badge-dot"></div>
+    System Online — Trading 24/7
+  </div>
+  <h1>Institutional Trading<br>Signals, Fully Automated</h1>
+  <p class="hero-sub">
+    HASSII Institute deploys five proprietary analysis engines across 50+ Binance Futures pairs —
+    detecting high-probability setups and executing trades automatically,
+    with precision entry, stop-loss, and take-profit — in under one second.
+  </p>
+  <div class="hero-btns">
+    <a class="hero-cta" href="/register">Get Started Free</a>
+    <a class="hero-sec" href="#how">See How It Works</a>
+  </div>
+  <!-- ticker -->
+  <div class="ticker">
+    <div class="ticker-inner">
+      <span class="tick"><span class="tick-pair">BTCUSDT</span><span class="tick-up">▲ +2.41%</span></span>
+      <span class="tick"><span class="tick-pair">ETHUSDT</span><span class="tick-up">▲ +1.87%</span></span>
+      <span class="tick"><span class="tick-pair">SOLUSDT</span><span class="tick-dn">▼ -0.63%</span></span>
+      <span class="tick"><span class="tick-pair">BNBUSDT</span><span class="tick-up">▲ +3.12%</span></span>
+      <span class="tick"><span class="tick-pair">XRPUSDT</span><span class="tick-dn">▼ -1.20%</span></span>
+      <span class="tick"><span class="tick-pair">AVAXUSDT</span><span class="tick-up">▲ +4.05%</span></span>
+      <span class="tick"><span class="tick-pair">DOTUSDT</span><span class="tick-up">▲ +0.98%</span></span>
+      <span class="tick"><span class="tick-pair">LINKUSDT</span><span class="tick-dn">▼ -0.44%</span></span>
+      <!-- duplicate for seamless loop -->
+      <span class="tick"><span class="tick-pair">BTCUSDT</span><span class="tick-up">▲ +2.41%</span></span>
+      <span class="tick"><span class="tick-pair">ETHUSDT</span><span class="tick-up">▲ +1.87%</span></span>
+      <span class="tick"><span class="tick-pair">SOLUSDT</span><span class="tick-dn">▼ -0.63%</span></span>
+      <span class="tick"><span class="tick-pair">BNBUSDT</span><span class="tick-up">▲ +3.12%</span></span>
+      <span class="tick"><span class="tick-pair">XRPUSDT</span><span class="tick-dn">▼ -1.20%</span></span>
+      <span class="tick"><span class="tick-pair">AVAXUSDT</span><span class="tick-up">▲ +4.05%</span></span>
+      <span class="tick"><span class="tick-pair">DOTUSDT</span><span class="tick-up">▲ +0.98%</span></span>
+      <span class="tick"><span class="tick-pair">LINKUSDT</span><span class="tick-dn">▼ -0.44%</span></span>
     </div>
   </div>
 </div>
 
-<!-- ═══ STATS BAR ═══ -->
-<div class="stats-bar">
-  <div class="stat-item">
-    <div class="stat-val">5</div>
-    <div class="stat-label">Analysis Engines</div>
+<!-- STATS -->
+<div class="stats">
+  <div class="s-item">
+    <div class="s-val">5</div>
+    <div class="s-label">Analysis Engines</div>
   </div>
-  <div class="stat-item">
-    <div class="stat-val green">24 / 7</div>
-    <div class="stat-label">Market Monitoring</div>
+  <div class="s-item">
+    <div class="s-val g">24/7</div>
+    <div class="s-label">Continuous Monitoring</div>
   </div>
-  <div class="stat-item">
-    <div class="stat-val">50+</div>
-    <div class="stat-label">Pairs Scanned</div>
+  <div class="s-item">
+    <div class="s-val">50+</div>
+    <div class="s-label">Pairs Scanned</div>
   </div>
-  <div class="stat-item">
-    <div class="stat-val gold">&lt; 1s</div>
-    <div class="stat-label">Signal to Execution</div>
+  <div class="s-item">
+    <div class="s-val o">&lt;1s</div>
+    <div class="s-label">Signal to Execution</div>
   </div>
 </div>
 
-<!-- ═══ HOW IT WORKS ═══ -->
-<section id="how-it-works">
-  <div class="section-inner">
-    <div class="section-tag">Process</div>
-    <div class="section-title">How the System Works</div>
-    <p class="section-sub">Five independent engines run in parallel to generate, validate, and execute high-probability trades — fully automated, end to end.</p>
-    <div class="divider"></div>
+<!-- HOW IT WORKS -->
+<section class="section" id="how">
+  <div class="s-inner">
+    <div class="s-eyebrow">Process</div>
+    <div class="s-heading">From Signal to<br><span>Executed Trade</span></div>
+    <div class="bar"></div>
     <div class="steps">
       <div class="step">
-        <div class="step-line"></div>
-        <div class="step-num">01</div>
-        <span class="step-icon">📡</span>
-        <div class="step-title">Market Scanning</div>
-        <p class="step-desc">The system continuously scans the top 50 Binance Futures USDT pairs by volume, pulling real-time candles across multiple timeframes every cycle.</p>
+        <div class="step-n">01</div>
+        <span class="step-ico">📡</span>
+        <div class="step-t">Market Scan</div>
+        <p class="step-d">Continuous real-time scan of 50+ Binance Futures USDT pairs by volume across multiple timeframes — every market cycle.</p>
       </div>
       <div class="step">
-        <div class="step-line"></div>
-        <div class="step-num">02</div>
-        <span class="step-icon">🧠</span>
-        <div class="step-title">Signal Generation</div>
-        <p class="step-desc">Five proprietary engines — covering structure, smart money concepts, session analysis, liquidity, and confluence — each score the market independently.</p>
+        <div class="step-n">02</div>
+        <span class="step-ico">🧠</span>
+        <div class="step-t">Signal Engine</div>
+        <p class="step-d">Five independent engines — structure, smart money, session bias, liquidity mapping, and volatility — each score every pair independently.</p>
       </div>
       <div class="step">
-        <div class="step-line"></div>
-        <div class="step-num">03</div>
-        <span class="step-icon">⚖️</span>
-        <div class="step-title">Confluence Filter</div>
-        <p class="step-desc">Only setups that pass a minimum confidence threshold across all engines are approved. No single indicator makes the call — the entire system must agree.</p>
+        <div class="step-n">03</div>
+        <span class="step-ico">⚖️</span>
+        <div class="step-t">Confluence Gate</div>
+        <p class="step-d">Only setups passing a minimum confidence threshold across all five engines are approved. No single indicator decides — full system consensus required.</p>
       </div>
       <div class="step">
-        <div class="step-line"></div>
-        <div class="step-num">04</div>
-        <span class="step-icon">⚡</span>
-        <div class="step-title">Auto Execution</div>
-        <p class="step-desc">Approved signals are placed on Binance Futures in under a second — with preset stop-loss, take-profit levels, leverage, and position sizing applied automatically.</p>
+        <div class="step-n">04</div>
+        <span class="step-ico">⚡</span>
+        <div class="step-t">Auto Execute</div>
+        <p class="step-d">Approved signals fire on Binance Futures in under one second — entry, stop-loss, and up to three take-profit levels placed in a single atomic operation.</p>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ═══ FEATURES ═══ -->
-<section id="features" style="background: var(--bg2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
-  <div class="section-inner">
-    <div class="section-tag">Capabilities</div>
-    <div class="section-title">Built for Serious Traders</div>
-    <p class="section-sub">Every component is designed to remove emotion, reduce latency, and maximise consistency across all market conditions.</p>
-    <div class="divider"></div>
-    <div class="features-grid">
-      <div class="feature-card">
-        <span class="feature-icon">🔬</span>
-        <div class="feature-title">Multi-Engine Analysis</div>
-        <p class="feature-desc">Five dedicated analysis modules — market structure, smart money concepts, session bias, liquidity mapping, and volatility — run in parallel on every pair.</p>
-        <span class="feature-tag">5 Engines Active</span>
+<!-- FEATURES -->
+<section class="section feat-bg" id="features">
+  <div class="s-inner">
+    <div class="s-eyebrow">Capabilities</div>
+    <div class="s-heading">Built for the<br><span>End-Level Game</span></div>
+    <div class="bar"></div>
+    <div class="feat-grid">
+      <div class="feat-card">
+        <span class="feat-ico">🔬</span>
+        <div class="feat-t">Multi-Engine Analysis</div>
+        <p class="feat-d">Five dedicated modules run in parallel on every pair: market structure, smart money concepts, session bias, liquidity pools, and volatility scoring.</p>
+        <span class="feat-chip">5 Engines Parallel</span>
       </div>
-      <div class="feature-card">
-        <span class="feature-icon">🎯</span>
-        <div class="feature-title">Precision Entry & Exit</div>
-        <p class="feature-desc">Every trade includes a calculated entry zone, stop-loss, and up to three take-profit levels based on structural highs, lows, and liquidity pools.</p>
-        <span class="feature-tag">TP1 / TP2 / TP3</span>
+      <div class="feat-card">
+        <span class="feat-ico">🎯</span>
+        <div class="feat-t">Precision Entries</div>
+        <p class="feat-d">Every signal includes a calculated entry zone, hard stop-loss, and three graduated take-profit targets based on structural highs, lows, and liquidity pools.</p>
+        <span class="feat-chip">TP1 / TP2 / TP3</span>
       </div>
-      <div class="feature-card">
-        <span class="feature-icon">🛡️</span>
-        <div class="feature-title">Built-in Risk Management</div>
-        <p class="feature-desc">Risk per trade, leverage, minimum confidence score, and maximum concurrent positions are all configurable — the system enforces them on every execution.</p>
-        <span class="feature-tag">Configurable</span>
+      <div class="feat-card">
+        <span class="feat-ico">🛡️</span>
+        <div class="feat-t">Risk Management</div>
+        <p class="feat-d">Configurable risk-per-trade, leverage, minimum confidence score, and maximum concurrent positions — enforced on every execution without exception.</p>
+        <span class="feat-chip">Fully Configurable</span>
       </div>
-      <div class="feature-card">
-        <span class="feature-icon">📊</span>
-        <div class="feature-title">Real-Time Dashboard</div>
-        <p class="feature-desc">Live WebSocket feed shows open positions, floating PnL, closed trade history, and signal cards for every pair — updated in real time with no page refresh.</p>
-        <span class="feature-tag">Live WebSocket</span>
+      <div class="feat-card">
+        <span class="feat-ico">📊</span>
+        <div class="feat-t">Live Dashboard</div>
+        <p class="feat-d">Real-time WebSocket feed: open positions with live floating PnL, signal cards per pair, and full closed trade history — zero page refreshes.</p>
+        <span class="feat-chip">WebSocket Live</span>
       </div>
-      <div class="feature-card">
-        <span class="feature-icon">🌐</span>
-        <div class="feature-title">Binance Futures Native</div>
-        <p class="feature-desc">Connects directly to your Binance Futures account via API. Supports both mainnet and testnet. No third-party broker or intermediary involved.</p>
-        <span class="feature-tag">Direct API</span>
+      <div class="feat-card">
+        <span class="feat-ico">🌐</span>
+        <div class="feat-t">Binance Native</div>
+        <p class="feat-d">Direct Binance Futures API integration — no broker, no intermediary. Supports mainnet and testnet. Your keys, your account, your trades.</p>
+        <span class="feat-chip">Direct API</span>
       </div>
-      <div class="feature-card">
-        <span class="feature-icon">🔄</span>
-        <div class="feature-title">Always-On Monitoring</div>
-        <p class="feature-desc">The trading engine runs 24/7 in the cloud, monitoring positions, detecting externally closed trades, and syncing history automatically after restarts.</p>
-        <span class="feature-tag">24 / 7 Cloud</span>
+      <div class="feat-card">
+        <span class="feat-ico">🔄</span>
+        <div class="feat-t">Always-On Cloud</div>
+        <p class="feat-d">The engine runs 24/7 in the cloud, monitoring all positions, detecting externally closed trades, and syncing history automatically after any restart.</p>
+        <span class="feat-chip">24/7 Cloud Engine</span>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ═══ LIVE TERMINAL ═══ -->
-<section id="live" class="terminal-section">
-  <div class="section-inner">
-    <div class="terminal-wrap">
+<!-- LIVE TERMINAL -->
+<section class="section" id="live">
+  <div class="s-inner">
+    <div class="term-grid">
       <div>
-        <div class="section-tag">Live System</div>
-        <div class="section-title">Trades Execute<br>While You Sleep</div>
-        <div class="divider"></div>
-        <p class="section-sub" style="margin-bottom: 28px;">
-          The engine does not wait for you to act. Once a confluence signal is confirmed, the trade is placed, managed, and closed automatically — entry, SL, and TP all set in one shot.
+        <div class="s-eyebrow">Live System</div>
+        <div class="s-heading">Trades Execute<br><span>While You Sleep</span></div>
+        <div class="bar"></div>
+        <p class="s-body" style="margin-bottom:24px">
+          The engine does not wait. Once a high-confidence setup is confirmed across all engines,
+          the trade is placed, managed, and closed automatically — entry, SL, and all TP levels set in one shot.
         </p>
-        <p class="section-sub">
-          Closed trade history, PnL, and open positions sync back to your dashboard in real time via WebSocket — no refresh, no delay.
+        <p class="s-body">
+          Every trade syncs back to your personal dashboard in real time — open PnL, closed history, and live signal cards for every monitored pair.
         </p>
       </div>
-      <div class="terminal-box">
-        <div class="terminal-bar">
-          <div class="t-dot r"></div><div class="t-dot y"></div><div class="t-dot g"></div>
-          <span class="terminal-bar-title">hassii-engine &mdash; live feed</span>
+      <div class="term-box">
+        <div class="term-bar">
+          <div class="td r"></div><div class="td y"></div><div class="td g"></div>
+          <span class="term-title">hassii-engine &mdash; live feed</span>
         </div>
-        <div class="terminal-body">
-          <div class="t-line"><span class="t-time">09:14:22</span><span class="t-buy">LONG</span><span class="t-pair">BTCUSDT</span><span class="t-info">entry 67,240 | conf 88%</span></div>
-          <div class="t-line"><span class="t-time">09:14:22</span><span class="t-info">SL 66,800 &nbsp;TP1 67,800 &nbsp;TP2 68,400</span></div>
-          <div class="t-line" style="margin-top:8px"><span class="t-time">10:02:47</span><span class="t-buy">LONG</span><span class="t-pair">ETHUSDT</span><span class="t-info">entry 3,512 | conf 82%</span></div>
-          <div class="t-line"><span class="t-time">10:02:47</span><span class="t-info">SL 3,470 &nbsp;TP1 3,570 &nbsp;TP2 3,640</span></div>
-          <div class="t-line" style="margin-top:8px"><span class="t-time">11:38:05</span><span class="t-sell">SHORT</span><span class="t-pair">SOLUSDT</span><span class="t-info">entry 182.4 | conf 79%</span></div>
-          <div class="t-line"><span class="t-time">11:38:05</span><span class="t-info">SL 185.2 &nbsp;TP1 178.0 &nbsp;TP2 174.5</span></div>
-          <div class="t-line" style="margin-top:8px"><span class="t-time">12:55:19</span><span class="t-info">BTCUSDT &rarr; TP1 hit &nbsp;</span><span class="t-pnl-pos">+$142.30</span></div>
-          <div class="t-line"><span class="t-time">13:21:04</span><span class="t-info">SOLUSDT &rarr; closed SL &nbsp;</span><span class="t-pnl-neg">-$38.50</span></div>
-          <div class="t-line" style="margin-top:8px"><span class="t-time">14:07:33</span><span class="t-buy">LONG</span><span class="t-pair">BNBUSDT</span><span class="t-info">entry 612.0 | conf 85%</span></div>
-          <div class="t-line"><span class="t-time" style="opacity:0">__:__:__</span><span class="t-cursor"></span></div>
+        <div class="term-body">
+          <div class="tl"><span class="tt">09:14:22</span><span class="tb">LONG &nbsp;</span><span class="tp">BTCUSDT</span><span class="ti">&nbsp; entry 67,240 &nbsp;conf 88%</span></div>
+          <div class="tl"><span class="tt">&#8203;</span><span class="ti">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; SL 66,800 &nbsp;TP1 67,800 &nbsp;TP2 68,400</span></div>
+          <div class="tl" style="margin-top:4px"><span class="tt">10:02:47</span><span class="tb">LONG &nbsp;</span><span class="tp">ETHUSDT</span><span class="ti">&nbsp; entry 3,512 &nbsp;&nbsp;conf 82%</span></div>
+          <div class="tl"><span class="tt">&#8203;</span><span class="ti">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; SL 3,470 &nbsp;&nbsp;TP1 3,570 &nbsp;&nbsp;TP2 3,640</span></div>
+          <div class="tl" style="margin-top:4px"><span class="tt">11:38:05</span><span class="ts">SHORT</span><span class="tp">SOLUSDT</span><span class="ti">&nbsp; entry 182.4 &nbsp;&nbsp;conf 79%</span></div>
+          <div class="tl"><span class="tt">&#8203;</span><span class="ti">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; SL 185.2 &nbsp;&nbsp;TP1 178.0 &nbsp;&nbsp;TP2 174.5</span></div>
+          <div class="tl" style="margin-top:4px"><span class="tt">12:55:19</span><span class="ti">BTCUSDT &rarr; TP1 hit &nbsp;&nbsp;</span><span class="tp-pos">+$142.30</span></div>
+          <div class="tl"><span class="tt">13:21:04</span><span class="ti">SOLUSDT &rarr; SL hit &nbsp;&nbsp;&nbsp;</span><span class="tp-neg">-$38.50</span></div>
+          <div class="tl" style="margin-top:4px"><span class="tt">14:07:33</span><span class="tb">LONG &nbsp;</span><span class="tp">BNBUSDT</span><span class="ti">&nbsp; entry 612.0 &nbsp;&nbsp;conf 85%</span></div>
+          <div class="tl"><span class="tt">&#8203;</span><span class="cur"></span></div>
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ═══ CTA ═══ -->
+<!-- CTA -->
 <section class="cta-section">
-  <div class="cta-inner">
+  <div class="cta-wrap">
     <div class="cta-box">
       <div class="cta-glow"></div>
+      <div class="cta-label">Get Started Today</div>
       <div class="cta-title">Ready to Trade at the<br>Institutional Level?</div>
-      <p class="cta-sub">Create your account, connect your Binance API keys, and the system handles everything else — signal generation, execution, and monitoring.</p>
-      <div class="cta-buttons">
-        <a class="hero-btn-primary" href="/register">Create Account</a>
-        <a class="hero-btn-outline" href="/login">Sign In</a>
+      <p class="cta-sub">Create your account, connect your Binance Futures API keys, and the system handles everything — scanning, signaling, executing, and monitoring around the clock.</p>
+      <div class="cta-btns">
+        <a class="hero-cta" href="/register">Create Free Account</a>
+        <a class="hero-sec" href="/login">Sign In</a>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ═══ FOOTER ═══ -->
+<!-- FOOTER -->
 <footer>
-  <div class="footer-logo">⬡ &nbsp; HASSII Institute</div>
-  <div class="footer-copy">© 2025 HASSII Institute &nbsp;·&nbsp; All rights reserved</div>
+  <div class="f-logo">⬡ &nbsp; HASSII Institute</div>
+  <div class="f-copy">© 2025 HASSII Institute &nbsp;·&nbsp; All rights reserved</div>
 </footer>
 
 </body>
