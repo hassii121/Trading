@@ -177,8 +177,12 @@ def _refresh_pairs_loop():
 
 @app.route("/login", methods=["GET", "POST"])
 def login_page():
-    if session.get("user_id"):
-        return redirect(url_for("index"))
+    uid = session.get("user_id")
+    if uid:
+        # Validate session is still valid — clear if stale (DB wiped on redeploy)
+        if trader_db.get_user_by_id(uid):
+            return redirect(url_for("index"))
+        session.clear()
     # If no users exist yet, redirect to register to create admin
     if trader_db.get_user_count() == 0:
         return redirect(url_for("register_page"))
