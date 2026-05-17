@@ -42,19 +42,25 @@ NP_API_URL    = "https://api.nowpayments.io/v1"
 
 
 def _np_create_payment(amount_usd, order_id, description, currency):
-    resp = http_requests.post(
-        f"{NP_API_URL}/payment",
-        headers={"x-api-key": NP_API_KEY, "Content-Type": "application/json"},
-        json={
-            "price_amount":       amount_usd,
-            "price_currency":     "usd",
-            "pay_currency":       currency,
-            "order_id":           str(order_id),
-            "order_description":  description,
-        },
-        timeout=15,
-    )
-    return resp.json()
+    try:
+        resp = http_requests.post(
+            f"{NP_API_URL}/payment",
+            headers={"x-api-key": NP_API_KEY, "Content-Type": "application/json"},
+            json={
+                "price_amount":       amount_usd,
+                "price_currency":     "usd",
+                "pay_currency":       currency,
+                "order_id":           str(order_id),
+                "order_description":  description,
+            },
+            timeout=15,
+        )
+        data = resp.json()
+        log.info("NOWPayments response [%s]: %s", resp.status_code, data)
+        return data
+    except Exception as e:
+        log.error("NOWPayments request failed: %s", e)
+        return {"error": str(e)}
 
 
 def _np_verify_ipn(payload: dict, sig: str) -> bool:
@@ -107,6 +113,18 @@ engine5 = Engine5(cfg)
 
 # Auto-trader
 auto_trader = AutoTrader(socketio)
+
+# Auto-create admin from env vars — survives Railway redeploys (SQLite wipes on push)
+def _ensure_admin():
+    if trader_db.get_user_count() == 0:
+        email    = os.environ.get("ADMIN_EMAIL", "")
+        password = os.environ.get("ADMIN_PASSWORD", "")
+        username = os.environ.get("ADMIN_USERNAME", "admin")
+        if email and password:
+            trader_db.create_user(email, username,
+                                  generate_password_hash(password), "admin")
+            log.info("Auto-created admin account: %s", email)
+_ensure_admin()
 
 # Cache: last known result per pair — replayed to newly connected clients
 _latest: dict = {}
@@ -235,8 +253,10 @@ def subscribe_pay(plan_key):
         f"HASSII Institute {plan['name']} Subscription", currency
     )
     if "payment_id" not in result:
+        np_err = result.get("message") or result.get("error") or str(result)
+        log.error("NOWPayments create_payment failed: %s", np_err)
         return render_template("subscribe.html", plans=PLANS,
-                               error="Payment creation failed — try again", pending=None)
+                               error=f"Payment creation failed: {np_err}", pending=None)
 
     # Update with real payment details
     conn = trader_db.get_conn()
