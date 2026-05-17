@@ -62,9 +62,6 @@ class AutoTrader:
     # ── Public: monitor open trades (called in analysis loop) ────────────
 
     def monitor_trades(self):
-        open_trades = trader_db.get_open_trades()
-        if not open_trades:
-            return
         try:
             client = self._get_client()
         except Exception as e:
@@ -74,39 +71,43 @@ class AutoTrader:
         trade_tp_usd  = float(trader_db.get_setting("trade_tp_usd",  "0") or 0)
         basket_tp_usd = float(trader_db.get_setting("basket_tp_usd", "0") or 0)
 
-        total_upnl   = 0.0
-        active_trades = []  # still-open trades after individual checks
+        # ── Fetch ALL live positions directly from Binance ────────────
+        try:
+            all_positions = client.futures_position_information()
+        except Exception as e:
+            log.error("AutoTrader monitor: position fetch failed: %s", e)
+            return
 
-        for trade in open_trades:
-            pair = trade['pair']
-            try:
-                positions = client.futures_position_information(symbol=pair)
-                pos = next((p for p in positions if float(p['positionAmt']) != 0), None)
-                if pos:
-                    upnl = round(float(pos.get('unrealizedProfit', 0)), 4)
-                    self.socketio.emit("trade_pnl", {"pair": pair, "unrealized_pnl": upnl})
+        active = [(p["symbol"], float(p["positionAmt"]),
+                   round(float(p.get("unRealizedProfit", 0)), 4))
+                  for p in all_positions if float(p.get("positionAmt", 0)) != 0]
 
-                    # Per-trade dollar TP
-                    if trade_tp_usd > 0 and upnl >= trade_tp_usd:
-                        log.info("AutoTrader [%s]: per-trade TP hit ($%.2f) — closing", pair, upnl)
-                        self._close_at_market(client, trade, "TP_USD")
-                    else:
-                        total_upnl += upnl
-                        active_trades.append(trade)
-                else:
-                    self._handle_closed(client, trade)
-            except Exception as e:
-                log.error("AutoTrader monitor error [%s]: %s", pair, e)
+        if not active:
+            # Check DB trades that may have been closed on exchange side
+            for trade in trader_db.get_open_trades():
+                self._handle_closed(client, trade)
+            return
 
-        # Basket TP — close all remaining open trades if combined PnL target hit
-        if basket_tp_usd > 0 and active_trades and total_upnl >= basket_tp_usd:
-            log.info("AutoTrader: basket TP hit (total $%.2f >= $%.2f) — closing %d trades",
-                     total_upnl, basket_tp_usd, len(active_trades))
-            for trade in active_trades:
-                try:
-                    self._close_at_market(client, trade, "BASKET_TP")
-                except Exception as e:
-                    log.error("AutoTrader basket TP [%s]: %s", trade['pair'], e)
+        total_upnl = 0.0
+        remaining  = []
+
+        for pair, amt, upnl in active:
+            self.socketio.emit("trade_pnl", {"pair": pair, "unrealized_pnl": upnl})
+
+            if trade_tp_usd > 0 and upnl >= trade_tp_usd:
+                log.info("AutoTrader [%s]: per-trade TP hit ($%.2f >= $%.2f) — closing",
+                         pair, upnl, trade_tp_usd)
+                self._close_position(client, pair, amt, "TP_USD")
+            else:
+                total_upnl += upnl
+                remaining.append((pair, amt))
+
+        # Basket TP — close everything if combined PnL target hit
+        if basket_tp_usd > 0 and remaining and total_upnl >= basket_tp_usd:
+            log.info("AutoTrader: basket TP hit ($%.2f >= $%.2f) — closing %d positions",
+                     total_upnl, basket_tp_usd, len(remaining))
+            for pair, amt in remaining:
+                self._close_position(client, pair, amt, "BASKET_TP")
 
     # ── Public: account info for dashboard ───────────────────────────────
 
@@ -231,6 +232,43 @@ class AutoTrader:
             log.error("AutoTrader [%s]: Binance error: %s", pair, e.message)
         except Exception as e:
             log.error("AutoTrader [%s]: _place_trade error: %s", pair, e)
+
+    # ── Internal: close any live position by pair (works for manual trades too) ──
+
+    def _close_position(self, client, pair: str, pos_amt: float, reason: str):
+        try:
+            qty        = abs(pos_amt)
+            close_side = "SELL" if pos_amt > 0 else "BUY"
+
+            # Cancel all open orders for this pair first
+            try:
+                client.futures_cancel_all_open_orders(symbol=pair)
+            except Exception:
+                pass
+
+            client.futures_create_order(
+                symbol=pair, side=close_side, type="MARKET",
+                quantity=qty, reduceOnly=True
+            )
+
+            fills       = client.futures_account_trades(symbol=pair, limit=5)
+            close_price = float(fills[-1]["price"]) if fills else 0
+
+            # If bot opened this trade, clean up DB record
+            db_trade = trader_db.get_open_trade_by_pair(pair)
+            if db_trade:
+                pnl = (close_price - db_trade["entry_price"]) * db_trade["qty"]
+                if db_trade["direction"] == "SELL":
+                    pnl = -pnl
+                trader_db.close_trade(db_trade["id"], close_price, round(pnl, 4), reason)
+
+            self.socketio.emit("trade_closed", {
+                "pair": pair, "close_price": close_price, "close_reason": reason,
+            })
+            log.info("AutoTrader [%s]: closed | %s @ %.4f", pair, reason, close_price)
+
+        except Exception as e:
+            log.error("AutoTrader [%s]: _close_position error: %s", pair, e)
 
     # ── Internal: force-close at market (dollar TP / basket TP) ─────────
 
