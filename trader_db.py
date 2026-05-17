@@ -1,6 +1,6 @@
 import os
-import psycopg2
-import psycopg2.extras
+import urllib.parse
+import pg8000.dbapi
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
@@ -21,8 +21,29 @@ _ENV_FALLBACKS = {
 }
 
 
+def _parse_url(url):
+    p = urllib.parse.urlparse(url)
+    return dict(host=p.hostname, port=p.port or 5432,
+                database=p.path.lstrip("/"), user=p.username, password=p.password)
+
+
 def get_conn():
-    return psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+    return pg8000.dbapi.connect(**_parse_url(DATABASE_URL))
+
+
+def _one(cur):
+    if not cur.description:
+        return None
+    cols = [d[0] for d in cur.description]
+    row  = cur.fetchone()
+    return dict(zip(cols, row)) if row else None
+
+
+def _all(cur):
+    if not cur.description:
+        return []
+    cols = [d[0] for d in cur.description]
+    return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
 def init_db():
@@ -82,7 +103,7 @@ def get_setting(key, default=""):
     conn = get_conn()
     cur  = conn.cursor()
     cur.execute("SELECT value FROM trading_settings WHERE key=%s", (key,))
-    row = cur.fetchone()
+    row = _one(cur)
     cur.close()
     conn.close()
     if row and row["value"]:
@@ -120,7 +141,7 @@ def add_open_trade(data):
           data['qty'], data['notional'],
           data.get('entry_order_id'), data.get('sl_order_id'), data.get('tp1_order_id'),
           data.get('confidence'), data.get('timeframe')))
-    trade_id = cur.fetchone()["id"]
+    trade_id = _one(cur)["id"]
     conn.commit()
     cur.close()
     conn.close()
@@ -131,27 +152,27 @@ def get_open_trades():
     conn = get_conn()
     cur  = conn.cursor()
     cur.execute("SELECT * FROM open_trades ORDER BY opened_at DESC")
-    rows = cur.fetchall()
+    rows = _all(cur)
     cur.close()
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
 def get_open_trade_by_pair(pair):
     conn = get_conn()
     cur  = conn.cursor()
     cur.execute("SELECT * FROM open_trades WHERE pair=%s", (pair,))
-    row = cur.fetchone()
+    row = _one(cur)
     cur.close()
     conn.close()
-    return dict(row) if row else None
+    return row
 
 
 def close_trade(trade_id, close_price, pnl, close_reason):
     conn = get_conn()
     cur  = conn.cursor()
     cur.execute("SELECT * FROM open_trades WHERE id=%s", (trade_id,))
-    trade = cur.fetchone()
+    trade = _one(cur)
     if trade:
         cur.execute("""
             INSERT INTO closed_trades
@@ -171,10 +192,10 @@ def get_closed_trades(limit=100):
     conn = get_conn()
     cur  = conn.cursor()
     cur.execute("SELECT * FROM closed_trades ORDER BY closed_at DESC LIMIT %s", (limit,))
-    rows = cur.fetchall()
+    rows = _all(cur)
     cur.close()
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
 def add_closed_trade_direct(data):
