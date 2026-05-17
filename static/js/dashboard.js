@@ -483,7 +483,7 @@ function renderOpenTrades(rows) {
     const dirCls = t.direction === 'BUY' ? 'green' : 'red';
     const pnl    = t.unrealized_pnl != null ? t.unrealized_pnl : 0;
     const pnlCls = pnl > 0 ? 'var(--green)' : pnl < 0 ? 'var(--red)' : 'var(--text)';
-    const pnlStr = `<span style="color:${pnlCls}">${pnl>=0?'+':''}${fmt(pnl)}</span>`;
+    const pnlStr = `<span id="upnl-${t.pair}" style="color:${pnlCls}">${pnl>=0?'+':''}${fmt(pnl)}</span>`;
     return `<tr>
       <td>${(t.pair||'').replace('USDT','/USDT')}</td>
       <td class="${dirCls}">${t.direction||'—'}</td>

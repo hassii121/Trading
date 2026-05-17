@@ -14,6 +14,7 @@ log = logging.getLogger(__name__)
 class AutoTrader:
     def __init__(self, socketio):
         self.socketio = socketio
+        self._position_cache = {}  # pair -> {direction, entry_price, qty}
         trader_db.init_db()
 
     # ── Public: called from main after every engine run ─────────────────
@@ -78,10 +79,55 @@ class AutoTrader:
             log.error("AutoTrader monitor: position fetch failed: %s", e)
             return
 
-        active = [(p["symbol"], float(p["positionAmt"]),
-                   round(float(p.get("unrealizedProfit", 0)), 4),
-                   float(p.get("entryPrice", 0)))
-                  for p in all_positions if float(p.get("positionAmt", 0)) != 0]
+        active = []
+        for p in all_positions:
+            amt = float(p.get("positionAmt", 0))
+            if amt == 0:
+                continue
+            entry = float(p.get("entryPrice", 0))
+            mark  = float(p.get("markPrice",  0))
+            qty   = abs(amt)
+            upnl  = round((mark - entry) * qty if amt > 0 else (entry - mark) * qty, 4)
+            active.append((p["symbol"], amt, upnl, entry))
+
+        # ── Detect positions that closed externally (SL/TP on exchange) ──────
+        current_pairs = {pair for pair, _, _, _ in active}
+        for pair, cached in list(self._position_cache.items()):
+            if pair not in current_pairs:
+                if not trader_db.get_open_trade_by_pair(pair):
+                    try:
+                        fills = client.futures_account_trades(symbol=pair, limit=5)
+                        close_price = float(fills[-1]["price"]) if fills else cached["entry_price"]
+                        pnl = (close_price - cached["entry_price"]) * cached["qty"]
+                        if cached["direction"] == "SELL":
+                            pnl = -pnl
+                        pnl = round(pnl, 4)
+                        close_reason = "TP" if pnl > 0 else "SL"
+                        trader_db.add_closed_trade_direct({
+                            "pair":        pair,
+                            "direction":   cached["direction"],
+                            "entry_price": cached["entry_price"],
+                            "close_price": close_price,
+                            "qty":         cached["qty"],
+                            "notional":    round(cached["qty"] * close_price, 2),
+                            "pnl":         pnl,
+                            "close_reason": close_reason,
+                        })
+                        self.socketio.emit("trade_closed", {
+                            "pair": pair, "close_price": close_price,
+                            "close_reason": close_reason, "pnl": pnl,
+                        })
+                        log.info("AutoTrader [%s]: external close detected | %s | PnL: %.4f",
+                                 pair, close_reason, pnl)
+                    except Exception as e:
+                        log.error("AutoTrader [%s]: external-close detect error: %s", pair, e)
+
+        # Update position snapshot
+        self._position_cache = {
+            pair: {"direction": "BUY" if amt > 0 else "SELL",
+                   "entry_price": entry_price, "qty": abs(amt)}
+            for pair, amt, _, entry_price in active
+        }
 
         if not active:
             for trade in trader_db.get_open_trades():

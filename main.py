@@ -396,15 +396,20 @@ def api_trading_positions():
             amt = float(p.get("positionAmt", 0))
             if amt == 0:
                 continue
+            entry = float(p.get("entryPrice", 0))
+            mark  = float(p.get("markPrice",  0))
+            qty   = abs(amt)
+            # Calculate PnL directly — testnet unrealizedProfit field is unreliable
+            pnl = round((mark - entry) * qty if amt > 0 else (entry - mark) * qty, 4)
             positions.append({
-                "pair":       p["symbol"],
-                "direction":  "BUY" if amt > 0 else "SELL",
-                "qty":        abs(amt),
-                "entry_price": float(p.get("entryPrice", 0)),
-                "mark_price":  float(p.get("markPrice",  0)),
-                "unrealized_pnl": round(float(p.get("unrealizedProfit", 0)), 4),
-                "leverage":    int(p.get("leverage", 1)),
-                "notional":    round(abs(amt) * float(p.get("markPrice", 0)), 2),
+                "pair":           p["symbol"],
+                "direction":      "BUY" if amt > 0 else "SELL",
+                "qty":            qty,
+                "entry_price":    entry,
+                "mark_price":     mark,
+                "unrealized_pnl": pnl,
+                "leverage":       int(p.get("leverage", 1)),
+                "notional":       round(qty * mark, 2),
             })
         return jsonify(positions)
     except Exception as e:
