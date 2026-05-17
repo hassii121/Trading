@@ -347,6 +347,12 @@ def admin_delete_user(uid):
     return redirect(url_for("admin_page"))
 
 @app.route("/")
+def landing():
+    if session.get("user_id") and trader_db.get_user_by_id(session["user_id"]):
+        return redirect(url_for("index"))
+    return render_template("landing.html")
+
+@app.route("/dashboard")
 @login_required
 def index():
     return render_template("dashboard.html", pairs=cfg.PAIRS)
