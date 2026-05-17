@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>HASSII Institute — Complete Payment</title>
+  <style>
+    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+    :root {
+      --bg:#0a0d12; --bg2:#0f1319; --bg3:#151b24;
+      --border:#1e2a38; --border2:#253040;
+      --text:#cdd6e0; --text2:#6b7f93;
+      --accent:#00b4d8; --green:#00e676; --red:#ff4d6d; --gold:#ffd166;
+      --font:'Courier New','Consolas',monospace;
+    }
+    html,body { min-height:100%; background:var(--bg); color:var(--text); font-family:var(--font); }
+    .grid-bg { position:fixed; inset:0; background-image:linear-gradient(rgba(0,180,216,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(0,180,216,0.04) 1px,transparent 1px); background-size:40px 40px; animation:gridPan 20s linear infinite; pointer-events:none; }
+    @keyframes gridPan { 0%{background-position:0 0} 100%{background-position:40px 40px} }
+    .page { position:relative; z-index:10; max-width:560px; margin:0 auto; padding:60px 24px; }
+    .header { text-align:center; margin-bottom:40px; }
+    .hex-icon { font-size:40px; color:var(--gold); display:block; margin-bottom:16px; filter:drop-shadow(0 0 20px rgba(255,209,102,0.4)); animation:pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+    .page-title { font-size:18px; font-weight:700; letter-spacing:5px; color:var(--gold); text-transform:uppercase; }
+    .page-sub { font-size:11px; letter-spacing:2px; color:var(--text2); margin-top:8px; }
+    .card { background:var(--bg2); border:1px solid var(--border2); border-radius:10px; padding:32px; margin-bottom:20px; }
+    .card-title { font-size:9px; letter-spacing:3px; color:var(--text2); text-transform:uppercase; margin-bottom:20px; }
+    .amount-display { text-align:center; margin-bottom:28px; }
+    .amount-val { font-size:36px; font-weight:700; color:var(--gold); }
+    .amount-cur { font-size:12px; letter-spacing:3px; color:var(--text2); margin-top:4px; }
+    .address-label { font-size:9px; letter-spacing:3px; color:var(--text2); text-transform:uppercase; margin-bottom:10px; }
+    .address-box { background:var(--bg3); border:1px solid var(--border2); border-radius:6px; padding:14px 16px; font-size:12px; color:var(--accent); word-break:break-all; letter-spacing:1px; cursor:pointer; transition:border-color 0.2s; }
+    .address-box:hover { border-color:var(--accent); }
+    .copy-hint { font-size:9px; letter-spacing:2px; color:var(--text2); text-align:center; margin-top:8px; }
+    .steps { list-style:none; }
+    .steps li { display:flex; gap:14px; align-items:flex-start; padding:12px 0; border-bottom:1px solid var(--border); font-size:11px; color:var(--text2); letter-spacing:1px; }
+    .steps li:last-child { border-bottom:none; }
+    .step-num { flex-shrink:0; width:24px; height:24px; border-radius:50%; background:rgba(0,180,216,0.1); border:1px solid var(--accent); display:flex; align-items:center; justify-content:center; font-size:10px; color:var(--accent); font-weight:700; }
+    .warning { background:rgba(255,209,102,0.08); border:1px solid rgba(255,209,102,0.25); border-radius:6px; padding:14px 16px; font-size:11px; color:var(--gold); letter-spacing:1px; margin-top:16px; }
+    .back-link { text-align:center; margin-top:28px; font-size:11px; }
+    .back-link a { color:var(--text2); text-decoration:none; }
+    .back-link a:hover { color:var(--accent); }
+    .payment-id { font-size:9px; letter-spacing:2px; color:var(--border2); text-align:center; margin-top:16px; }
+  </style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div class="page">
+  <div class="header">
+    <span class="hex-icon">⬡</span>
+    <div class="page-title">Complete Payment</div>
+    <div class="page-sub">{{ plan.name }} Plan — {{ plan.days }} days access</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Amount to Send</div>
+    <div class="amount-display">
+      <div class="amount-val">{{ pay_amount }}</div>
+      <div class="amount-cur">{{ currency }}</div>
+    </div>
+    <div class="address-label">Send to this address</div>
+    <div class="address-box" onclick="copyAddr(this)">{{ pay_address }}</div>
+    <div class="copy-hint">Click to copy address</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Instructions</div>
+    <ul class="steps">
+      <li><span class="step-num">1</span>Open your crypto wallet (Trust Wallet, Binance, etc.)</li>
+      <li><span class="step-num">2</span>Send exactly <strong style="color:var(--gold)">{{ pay_amount }} {{ currency }}</strong> to the address above</li>
+      <li><span class="step-num">3</span>Make sure you use the correct network ({{ 'TRC20 — Tron network' if 'TRC' in currency else 'BEP20 — BSC network' }})</li>
+      <li><span class="step-num">4</span>Wait 1–10 minutes for blockchain confirmation</li>
+      <li><span class="step-num">5</span>Your account activates automatically — no action needed</li>
+    </ul>
+    <div class="warning">
+      ⚠ Send the exact amount shown. Do not send from an exchange — use a personal wallet.
+    </div>
+  </div>
+
+  <div class="payment-id">Payment ID: {{ payment_id }}</div>
+  <div class="back-link"><a href="/subscribe">← Back to plans</a> &nbsp;|&nbsp; <a href="/logout">Logout</a></div>
+</div>
+
+<script>
+function copyAddr(el) {
+  navigator.clipboard.writeText(el.textContent.trim()).then(() => {
+    const orig = el.textContent;
+    el.textContent = '✓ Copied!';
+    el.style.color = 'var(--green)';
+    setTimeout(() => { el.textContent = orig; el.style.color = ''; }, 2000);
+  });
+}
+</script>
+</body>
+</html>

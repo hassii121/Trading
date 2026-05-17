@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>HASSII Institute — Subscribe</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:#0a0d12; --bg2:#0f1319; --bg3:#151b24;
+      --border:#1e2a38; --border2:#253040;
+      --text:#cdd6e0; --text2:#6b7f93;
+      --accent:#00b4d8; --green:#00e676; --red:#ff4d6d; --gold:#ffd166;
+      --font:'Courier New','Consolas',monospace;
+    }
+    html,body { min-height:100%; background:var(--bg); color:var(--text); font-family:var(--font); }
+    .grid-bg { position:fixed; inset:0; background-image:linear-gradient(rgba(0,180,216,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(0,180,216,0.04) 1px,transparent 1px); background-size:40px 40px; animation:gridPan 20s linear infinite; pointer-events:none; }
+    @keyframes gridPan { 0%{background-position:0 0} 100%{background-position:40px 40px} }
+    .page { position:relative; z-index:10; max-width:900px; margin:0 auto; padding:60px 24px; }
+    .header { text-align:center; margin-bottom:56px; }
+    .hex-icon { font-size:40px; color:var(--accent); display:block; margin-bottom:16px; filter:drop-shadow(0 0 20px rgba(0,180,216,0.5)); }
+    .page-title { font-size:22px; font-weight:700; letter-spacing:6px; color:var(--accent); text-transform:uppercase; }
+    .page-sub { font-size:11px; letter-spacing:3px; color:var(--text2); margin-top:10px; text-transform:uppercase; }
+    .divider { width:60px; height:1px; background:linear-gradient(90deg,transparent,var(--accent),transparent); margin:20px auto 0; }
+    .error-msg { background:rgba(255,77,109,0.1); border:1px solid rgba(255,77,109,0.3); border-radius:6px; color:var(--red); font-size:12px; text-align:center; padding:12px; margin-bottom:32px; }
+    .pending-msg { background:rgba(255,209,102,0.1); border:1px solid rgba(255,209,102,0.3); border-radius:6px; color:var(--gold); font-size:11px; letter-spacing:1px; padding:14px 20px; margin-bottom:32px; text-align:center; }
+    .plans { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:24px; }
+    .plan-card { background:var(--bg2); border:1px solid var(--border2); border-radius:10px; padding:32px 28px; text-align:center; transition:border-color 0.2s,box-shadow 0.2s; }
+    .plan-card:hover { border-color:var(--accent); box-shadow:0 0 24px rgba(0,180,216,0.1); }
+    .plan-card.featured { border-color:var(--gold); box-shadow:0 0 24px rgba(255,209,102,0.08); }
+    .plan-badge { font-size:8px; letter-spacing:3px; text-transform:uppercase; color:var(--gold); margin-bottom:12px; }
+    .plan-name { font-size:14px; letter-spacing:4px; color:var(--accent); text-transform:uppercase; margin-bottom:20px; }
+    .plan-price { font-size:42px; font-weight:700; color:var(--text); margin-bottom:4px; }
+    .plan-price span { font-size:16px; color:var(--text2); }
+    .plan-duration { font-size:10px; letter-spacing:2px; color:var(--text2); text-transform:uppercase; margin-bottom:24px; }
+    .plan-features { list-style:none; margin-bottom:28px; }
+    .plan-features li { font-size:11px; letter-spacing:1px; color:var(--text2); padding:6px 0; border-bottom:1px solid var(--border); }
+    .plan-features li:last-child { border-bottom:none; }
+    .plan-features li::before { content:"✓ "; color:var(--green); }
+    .currency-select { width:100%; background:var(--bg3); border:1px solid var(--border2); border-radius:6px; color:var(--text); font-family:var(--font); font-size:11px; padding:10px 12px; margin-bottom:12px; outline:none; cursor:pointer; }
+    .subscribe-btn { width:100%; padding:13px; background:linear-gradient(135deg,rgba(0,180,216,0.15),rgba(0,119,182,0.15)); border:1px solid var(--accent); border-radius:6px; color:var(--accent); font-family:var(--font); font-size:11px; font-weight:700; letter-spacing:3px; text-transform:uppercase; cursor:pointer; transition:all 0.2s; }
+    .subscribe-btn:hover { background:linear-gradient(135deg,rgba(0,180,216,0.25),rgba(0,119,182,0.25)); box-shadow:0 0 20px rgba(0,180,216,0.2); }
+    .featured .subscribe-btn { border-color:var(--gold); color:var(--gold); background:linear-gradient(135deg,rgba(255,209,102,0.1),rgba(255,209,102,0.05)); }
+    .footer-links { text-align:center; margin-top:40px; font-size:11px; color:var(--text2); }
+    .footer-links a { color:var(--text2); text-decoration:none; margin:0 12px; }
+    .footer-links a:hover { color:var(--accent); }
+  </style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div class="page">
+  <div class="header">
+    <span class="hex-icon">⬡</span>
+    <div class="page-title">Choose Your Plan</div>
+    <div class="page-sub">Institutional Trading Signals — Full Access</div>
+    <div class="divider"></div>
+  </div>
+
+  {% if error %}
+  <div class="error-msg">⚠ {{ error }}</div>
+  {% endif %}
+
+  {% if pending and pending.payment_status == 'pending' %}
+  <div class="pending-msg">
+    ⏳ You have a pending payment. If you already sent funds, please wait for confirmation.
+    Payment ID: {{ pending.payment_id }}
+  </div>
+  {% endif %}
+
+  <div class="plans">
+    {% for key, plan in plans.items() %}
+    <div class="plan-card {% if key == 'quarterly' %}featured{% endif %}">
+      {% if key == 'quarterly' %}<div class="plan-badge">★ Most Popular</div>{% endif %}
+      <div class="plan-name">{{ plan.name }}</div>
+      <div class="plan-price">${{ plan.price }}<span>/{{ 'mo' if key == 'monthly' else '3mo' if key == 'quarterly' else 'yr' }}</span></div>
+      <div class="plan-duration">{{ plan.days }} days access</div>
+      <ul class="plan-features">
+        <li>All trading signals</li>
+        <li>Auto-trade execution</li>
+        <li>Real-time dashboard</li>
+        <li>All {{ 30 if key == 'monthly' else 90 if key == 'quarterly' else 365 }} days included</li>
+      </ul>
+      <form method="POST" action="/subscribe/{{ key }}">
+        <select class="currency-select" name="currency">
+          <option value="usdttrc20">USDT — TRC20 (Tron)</option>
+          <option value="usdtbsc">USDT — BEP20 (BSC)</option>
+        </select>
+        <button class="subscribe-btn" type="submit">Pay with USDT</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="footer-links">
+    <a href="/logout">Logout</a>
+  </div>
+</div>
+</body>
+</html>

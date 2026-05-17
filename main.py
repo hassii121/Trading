@@ -6,7 +6,7 @@ from flask import Flask, render_template, request, jsonify, session, redirect, u
 from flask_socketio import SocketIO, emit, disconnect
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
-import threading, logging, time
+import os, threading, logging, time, hmac, hashlib, json, requests as http_requests
 from concurrent.futures import ThreadPoolExecutor
 
 from binance.client import Client
@@ -29,11 +29,55 @@ app.secret_key = cfg.SECRET_KEY
 socketio     = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 
+# ── Subscription plans ───────────────────────────────────────────────────────
+PLANS = {
+    "monthly":   {"name": "Monthly",   "price": 29,  "days": 30},
+    "quarterly": {"name": "Quarterly", "price": 75,  "days": 90},
+    "yearly":    {"name": "Yearly",    "price": 249, "days": 365},
+}
+
+NP_API_KEY    = os.environ.get("NOWPAYMENTS_API_KEY",    "")
+NP_IPN_SECRET = os.environ.get("NOWPAYMENTS_IPN_SECRET", "")
+NP_API_URL    = "https://api.nowpayments.io/v1"
+
+
+def _np_create_payment(amount_usd, order_id, description, currency):
+    resp = http_requests.post(
+        f"{NP_API_URL}/payment",
+        headers={"x-api-key": NP_API_KEY, "Content-Type": "application/json"},
+        json={
+            "price_amount":       amount_usd,
+            "price_currency":     "usd",
+            "pay_currency":       currency,
+            "order_id":           str(order_id),
+            "order_description":  description,
+        },
+        timeout=15,
+    )
+    return resp.json()
+
+
+def _np_verify_ipn(payload: dict, sig: str) -> bool:
+    sorted_str = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    expected   = hmac.new(
+        NP_IPN_SECRET.encode(), sorted_str.encode(), hashlib.sha512
+    ).hexdigest()
+    return hmac.compare_digest(expected, sig.lower())
+
+
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if not session.get("user_id"):
+            if request.path.startswith("/api/"):
+                return jsonify({"error": "Not authenticated"}), 401
             return redirect(url_for("login_page"))
+        # Subscription gate — admins bypass
+        if session.get("role") != "admin":
+            if not trader_db.has_active_subscription(session["user_id"]):
+                if request.path.startswith("/api/"):
+                    return jsonify({"error": "No active subscription"}), 403
+                return redirect(url_for("subscribe_page"))
         return f(*args, **kwargs)
     return decorated
 
@@ -161,11 +205,77 @@ def logout():
     session.clear()
     return redirect(url_for("login_page"))
 
+@app.route("/subscribe")
+def subscribe_page():
+    if not session.get("user_id"):
+        return redirect(url_for("login_page"))
+    if session.get("role") == "admin" or trader_db.has_active_subscription(session["user_id"]):
+        return redirect(url_for("index"))
+    sub = trader_db.get_user_subscription(session["user_id"])
+    return render_template("subscribe.html", plans=PLANS, pending=sub)
+
+@app.route("/subscribe/<plan_key>", methods=["POST"])
+def subscribe_pay(plan_key):
+    if not session.get("user_id"):
+        return redirect(url_for("login_page"))
+    plan = PLANS.get(plan_key)
+    if not plan:
+        return redirect(url_for("subscribe_page"))
+    currency = request.form.get("currency", "usdttrc20")
+    if currency not in ("usdttrc20", "usdtbsc"):
+        currency = "usdttrc20"
+
+    # Create a placeholder subscription to get an order_id
+    temp_sub_id = trader_db.create_subscription(
+        session["user_id"], plan["name"], plan["price"], plan["days"],
+        "pending", "", 0, currency
+    )
+    result = _np_create_payment(
+        plan["price"], f"sub_{temp_sub_id}",
+        f"HASSII Institute {plan['name']} Subscription", currency
+    )
+    if "payment_id" not in result:
+        return render_template("subscribe.html", plans=PLANS,
+                               error="Payment creation failed — try again", pending=None)
+
+    # Update with real payment details
+    conn = trader_db.get_conn()
+    conn.execute("""UPDATE subscriptions SET
+                    payment_id=?, pay_address=?, pay_amount=?, pay_currency=?
+                    WHERE id=?""",
+                 (result["payment_id"], result.get("pay_address",""),
+                  result.get("pay_amount", 0), currency, temp_sub_id))
+    conn.commit()
+    conn.close()
+
+    return render_template("payment.html",
+                           plan=plan,
+                           pay_address=result.get("pay_address",""),
+                           pay_amount=result.get("pay_amount", plan["price"]),
+                           currency=currency.upper(),
+                           payment_id=result["payment_id"],
+                           sub_id=temp_sub_id)
+
+@app.route("/webhooks/nowpayments", methods=["POST"])
+def nowpayments_webhook():
+    data = request.get_json(force=True) or {}
+    sig  = request.headers.get("x-nowpayments-sig", "")
+    if NP_IPN_SECRET and not _np_verify_ipn(data, sig):
+        log.warning("NOWPayments IPN: invalid signature")
+        return jsonify({"error": "Invalid signature"}), 400
+    status     = data.get("payment_status", "")
+    payment_id = str(data.get("payment_id", ""))
+    if status in ("finished", "confirmed") and payment_id:
+        trader_db.activate_subscription(payment_id)
+        log.info("Subscription activated — payment_id=%s", payment_id)
+    return jsonify({"ok": True})
+
 @app.route("/admin")
 @admin_required
 def admin_page():
     users = trader_db.get_all_users()
-    return render_template("admin.html", users=users)
+    subs  = trader_db.get_all_subscriptions()
+    return render_template("admin.html", users=users, subs=subs)
 
 @app.route("/admin/toggle_user/<int:uid>", methods=["POST"])
 @admin_required

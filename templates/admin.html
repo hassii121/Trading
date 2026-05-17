@@ -101,6 +101,29 @@
       </tbody>
     </table>
   </div>
+
+  <h2 style="margin-top:40px">Subscriptions</h2>
+  <div class="section">
+    <table>
+      <thead>
+        <tr><th>User</th><th>Plan</th><th>Amount</th><th>Network</th><th>Status</th><th>Expires</th></tr>
+      </thead>
+      <tbody>
+        {% for s in subs %}
+        <tr>
+          <td>{{ s.username }}</td>
+          <td>{{ s.plan_name }}</td>
+          <td style="color:var(--gold)">${{ s.amount_usd }}</td>
+          <td style="color:var(--text2)">{{ s.pay_currency or '—' }}</td>
+          <td><span class="badge {% if s.payment_status == 'confirmed' %}badge-active{% else %}badge-inactive{% endif %}">{{ s.payment_status }}</span></td>
+          <td style="color:var(--text2)">{{ s.expires_at[:10] if s.expires_at else '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="no-data">No subscriptions yet</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 
 </body>

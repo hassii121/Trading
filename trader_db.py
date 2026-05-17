@@ -35,6 +35,21 @@ def init_db():
             is_active     INTEGER DEFAULT 1,
             created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+        CREATE TABLE IF NOT EXISTS subscriptions (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id        INTEGER NOT NULL,
+            plan_name      TEXT,
+            amount_usd     REAL,
+            duration_days  INTEGER,
+            payment_id     TEXT,
+            pay_address    TEXT,
+            pay_amount     REAL,
+            pay_currency   TEXT,
+            payment_status TEXT DEFAULT 'pending',
+            started_at     TIMESTAMP,
+            expires_at     TIMESTAMP,
+            created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
         CREATE TABLE IF NOT EXISTS trading_settings (
             key   TEXT PRIMARY KEY,
             value TEXT
@@ -122,6 +137,66 @@ def delete_user(user_id):
     conn.execute("DELETE FROM users WHERE id=?", (user_id,))
     conn.commit()
     conn.close()
+
+def create_subscription(user_id, plan_name, amount_usd, duration_days,
+                        payment_id, pay_address, pay_amount, pay_currency):
+    conn = get_conn()
+    c    = conn.cursor()
+    c.execute("""INSERT INTO subscriptions
+                 (user_id, plan_name, amount_usd, duration_days,
+                  payment_id, pay_address, pay_amount, pay_currency)
+                 VALUES (?,?,?,?,?,?,?,?)""",
+              (user_id, plan_name, amount_usd, duration_days,
+               payment_id, pay_address, pay_amount, pay_currency))
+    sub_id = c.lastrowid
+    conn.commit()
+    conn.close()
+    return sub_id
+
+def get_subscription(sub_id):
+    conn = get_conn()
+    row  = conn.execute("SELECT * FROM subscriptions WHERE id=?", (sub_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def activate_subscription(payment_id):
+    conn = get_conn()
+    sub  = conn.execute("SELECT * FROM subscriptions WHERE payment_id=?",
+                        (payment_id,)).fetchone()
+    if sub:
+        conn.execute("""UPDATE subscriptions SET
+                        payment_status='confirmed',
+                        started_at=CURRENT_TIMESTAMP,
+                        expires_at=datetime(CURRENT_TIMESTAMP, '+' || duration_days || ' days')
+                        WHERE payment_id=?""", (payment_id,))
+    conn.commit()
+    conn.close()
+
+def has_active_subscription(user_id):
+    conn = get_conn()
+    row  = conn.execute("""SELECT id FROM subscriptions
+                           WHERE user_id=? AND payment_status='confirmed'
+                           AND expires_at > CURRENT_TIMESTAMP
+                           ORDER BY expires_at DESC LIMIT 1""",
+                        (user_id,)).fetchone()
+    conn.close()
+    return row is not None
+
+def get_user_subscription(user_id):
+    conn = get_conn()
+    row  = conn.execute("""SELECT * FROM subscriptions WHERE user_id=?
+                           ORDER BY created_at DESC LIMIT 1""",
+                        (user_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def get_all_subscriptions():
+    conn = get_conn()
+    rows = conn.execute("""SELECT s.*, u.username, u.email FROM subscriptions s
+                           JOIN users u ON s.user_id=u.id
+                           ORDER BY s.created_at DESC""").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 def get_setting(key, default=""):
     conn = get_conn()
