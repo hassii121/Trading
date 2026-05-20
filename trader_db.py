@@ -51,11 +51,22 @@ def init_db():
             created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         CREATE TABLE IF NOT EXISTS trading_settings (
-            key   TEXT PRIMARY KEY,
-            value TEXT
+            id      INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            key     TEXT NOT NULL,
+            value   TEXT,
+            UNIQUE(user_id, key)
+        );
+        CREATE TABLE IF NOT EXISTS user_binance_keys (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    INTEGER UNIQUE NOT NULL,
+            api_key    TEXT NOT NULL,
+            api_secret TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         CREATE TABLE IF NOT EXISTS open_trades (
             id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id        INTEGER NOT NULL DEFAULT 1,
             pair           TEXT,
             direction      TEXT,
             entry_price    REAL,
@@ -74,6 +85,7 @@ def init_db():
         );
         CREATE TABLE IF NOT EXISTS closed_trades (
             id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id        INTEGER NOT NULL DEFAULT 1,
             pair           TEXT,
             direction      TEXT,
             entry_price    REAL,
@@ -198,32 +210,56 @@ def get_all_subscriptions():
     conn.close()
     return [dict(r) for r in rows]
 
-def get_setting(key, default=""):
+def get_setting(key, user_id=None, default=""):
     conn = get_conn()
-    row  = conn.execute("SELECT value FROM trading_settings WHERE key=?", (key,)).fetchone()
-    conn.close()
-    if row and row["value"]:
-        return row["value"]
+    if user_id:
+        row = conn.execute("SELECT value FROM trading_settings WHERE user_id=? AND key=?",
+                          (user_id, key)).fetchone()
+        conn.close()
+        if row and row["value"]:
+            return row["value"]
     env_var = _ENV_FALLBACKS.get(key)
     if env_var:
         return os.environ.get(env_var, default)
     return default
 
-def set_setting(key, value):
+def set_setting(key, value, user_id):
     conn = get_conn()
-    conn.execute("INSERT OR REPLACE INTO trading_settings (key, value) VALUES (?,?)", (key, value))
+    conn.execute("INSERT OR REPLACE INTO trading_settings (user_id, key, value) VALUES (?,?,?)",
+                (user_id, key, value))
     conn.commit()
     conn.close()
 
-def add_open_trade(data):
+def get_user_settings(user_id):
+    conn = get_conn()
+    rows = conn.execute("SELECT key, value FROM trading_settings WHERE user_id=?", (user_id,)).fetchall()
+    conn.close()
+    return {row["key"]: row["value"] for row in rows}
+
+def set_binance_keys(user_id, api_key, api_secret):
+    conn = get_conn()
+    conn.execute("INSERT OR REPLACE INTO user_binance_keys (user_id, api_key, api_secret) VALUES (?,?,?)",
+                (user_id, api_key, api_secret))
+    conn.commit()
+    conn.close()
+
+def get_binance_keys(user_id):
+    conn = get_conn()
+    row = conn.execute("SELECT api_key, api_secret FROM user_binance_keys WHERE user_id=?", (user_id,)).fetchone()
+    conn.close()
+    if row:
+        return {"api_key": row["api_key"], "api_secret": row["api_secret"]}
+    return None
+
+def add_open_trade(data, user_id):
     conn = get_conn()
     c    = conn.cursor()
     c.execute("""INSERT INTO open_trades
-                 (pair, direction, entry_price, sl, tp1, tp2, tp3,
+                 (user_id, pair, direction, entry_price, sl, tp1, tp2, tp3,
                   qty, notional, entry_order_id, sl_order_id, tp1_order_id,
                   confidence, timeframe)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-              (data['pair'], data['direction'], data['entry_price'],
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+              (user_id, data['pair'], data['direction'], data['entry_price'],
                data['sl'], data['tp1'], data.get('tp2'), data.get('tp3'),
                data['qty'], data['notional'],
                data.get('entry_order_id'), data.get('sl_order_id'), data.get('tp1_order_id'),
@@ -233,9 +269,12 @@ def add_open_trade(data):
     conn.close()
     return trade_id
 
-def get_open_trades():
+def get_open_trades(user_id=None):
     conn = get_conn()
-    rows = conn.execute("SELECT * FROM open_trades ORDER BY opened_at DESC").fetchall()
+    if user_id:
+        rows = conn.execute("SELECT * FROM open_trades WHERE user_id=? ORDER BY opened_at DESC", (user_id,)).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM open_trades ORDER BY opened_at DESC").fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -250,29 +289,33 @@ def close_trade(trade_id, close_price, pnl, close_reason):
     trade = conn.execute("SELECT * FROM open_trades WHERE id=?", (trade_id,)).fetchone()
     if trade:
         conn.execute("""INSERT INTO closed_trades
-                        (pair, direction, entry_price, close_price, sl, tp1,
+                        (user_id, pair, direction, entry_price, close_price, sl, tp1,
                          qty, notional, pnl, close_reason, confidence, timeframe, opened_at)
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                     (trade['pair'], trade['direction'], trade['entry_price'], close_price,
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                     (trade['user_id'], trade['pair'], trade['direction'], trade['entry_price'], close_price,
                       trade['sl'], trade['tp1'], trade['qty'], trade['notional'],
                       pnl, close_reason, trade['confidence'], trade['timeframe'], trade['opened_at']))
         conn.execute("DELETE FROM open_trades WHERE id=?", (trade_id,))
     conn.commit()
     conn.close()
 
-def get_closed_trades(limit=100):
+def get_closed_trades(user_id=None, limit=100):
     conn = get_conn()
-    rows = conn.execute("SELECT * FROM closed_trades ORDER BY closed_at DESC LIMIT ?", (limit,)).fetchall()
+    if user_id:
+        rows = conn.execute("SELECT * FROM closed_trades WHERE user_id=? ORDER BY closed_at DESC LIMIT ?",
+                           (user_id, limit)).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM closed_trades ORDER BY closed_at DESC LIMIT ?", (limit,)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
-def add_closed_trade_direct(data):
+def add_closed_trade_direct(data, user_id):
     conn = get_conn()
     conn.execute("""INSERT INTO closed_trades
-                    (pair, direction, entry_price, close_price, sl, tp1,
+                    (user_id, pair, direction, entry_price, close_price, sl, tp1,
                      qty, notional, pnl, close_reason, confidence, timeframe, opened_at)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                 (data['pair'], data['direction'], data['entry_price'], data['close_price'],
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                 (user_id, data['pair'], data['direction'], data['entry_price'], data['close_price'],
                   data.get('sl'), data.get('tp1'), data['qty'], data.get('notional'),
                   data['pnl'], data['close_reason'], data.get('confidence'), data.get('timeframe'),
                   data.get('opened_at')))
