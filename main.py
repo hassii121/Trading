@@ -646,7 +646,22 @@ def api_save_trading_settings():
 @app.route("/api/trading/account")
 @login_required
 def api_trading_account():
-    return jsonify(auto_trader.get_account_info())
+    user_id = session["user_id"]
+    keys = trader_db.get_binance_keys(user_id)
+    if not keys:
+        return jsonify({"ok": False, "error": "Binance API keys not configured. Add them in Settings."})
+    try:
+        client = Client(keys["api_key"], keys["api_secret"])
+        account = client.futures_account()
+        return jsonify({
+            "ok":              True,
+            "balance":         round(float(account['totalWalletBalance']),   2),
+            "equity":          round(float(account['totalMarginBalance']),   2),
+            "unrealized_pnl":  round(float(account['totalUnrealizedProfit']), 4),
+            "available":       round(float(account['availableBalance']),     2),
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
 
 @app.route("/api/trading/positions")
 @login_required
