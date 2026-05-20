@@ -119,16 +119,28 @@ engine5 = Engine5(cfg)
 # Auto-trader
 auto_trader = AutoTrader(socketio)
 
-# Auto-create admin from env vars — survives Railway redeploys (SQLite wipes on push)
+# Init DB tables (safe — CREATE TABLE IF NOT EXISTS)
+try:
+    trader_db.init_db()
+    log.info("Database tables ready")
+except Exception as e:
+    log.error("init_db failed: %s", e)
+
+# Auto-create admin from env vars — survives redeploys
 def _ensure_admin():
-    if trader_db.get_user_count() == 0:
-        email    = os.environ.get("ADMIN_EMAIL", "")
-        password = os.environ.get("ADMIN_PASSWORD", "")
-        username = os.environ.get("ADMIN_USERNAME", "admin")
-        if email and password:
-            trader_db.create_user(email, username,
-                                  generate_password_hash(password), "admin")
-            log.info("Auto-created admin account: %s", email)
+    try:
+        if trader_db.get_user_count() == 0:
+            email    = os.environ.get("ADMIN_EMAIL", "")
+            password = os.environ.get("ADMIN_PASSWORD", "")
+            username = os.environ.get("ADMIN_USERNAME", "admin")
+            if email and password:
+                trader_db.create_user(email, username,
+                                      generate_password_hash(password), "admin")
+                log.info("Auto-created admin account: %s", email)
+            else:
+                log.warning("ADMIN_EMAIL/ADMIN_PASSWORD not set — skipping auto-admin")
+    except Exception as e:
+        log.error("_ensure_admin failed: %s", e)
 _ensure_admin()
 
 # Cache: last known result per pair — replayed to newly connected clients
