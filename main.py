@@ -119,15 +119,19 @@ engine5 = Engine5(cfg)
 # Auto-trader
 auto_trader = AutoTrader(socketio)
 
-# Init DB tables (safe — CREATE TABLE IF NOT EXISTS)
-try:
-    trader_db.init_db()
-    log.info("Database tables ready")
-except Exception as e:
-    log.error("init_db failed: %s", e)
+_db_ready = False
 
-# Auto-create admin from env vars — survives redeploys
-def _ensure_admin():
+def _setup_db():
+    global _db_ready
+    if _db_ready:
+        return
+    try:
+        trader_db.init_db()
+        log.info("Database tables ready")
+        _db_ready = True
+    except Exception as e:
+        log.error("init_db failed: %s", e)
+        return
     try:
         if trader_db.get_user_count() == 0:
             email    = os.environ.get("ADMIN_EMAIL", "")
@@ -141,7 +145,9 @@ def _ensure_admin():
                 log.warning("ADMIN_EMAIL/ADMIN_PASSWORD not set — skipping auto-admin")
     except Exception as e:
         log.error("_ensure_admin failed: %s", e)
-_ensure_admin()
+
+# Run once at startup — if DB not ready yet it will retry on first request
+_setup_db()
 
 # Cache: last known result per pair — replayed to newly connected clients
 _latest: dict = {}
@@ -183,6 +189,7 @@ def _refresh_pairs_loop():
 
 @app.route("/login", methods=["GET", "POST"])
 def login_page():
+    _setup_db()
     uid = session.get("user_id")
     if uid and trader_db.get_user_by_id(uid):
         return redirect(url_for("index"))
@@ -363,6 +370,7 @@ def admin_delete_user(uid):
 
 @app.route("/")
 def landing():
+    _setup_db()
     if session.get("user_id") and trader_db.get_user_by_id(session["user_id"]):
         return redirect(url_for("index"))
     return render_template("landing.html")
