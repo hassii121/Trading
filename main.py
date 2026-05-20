@@ -601,41 +601,43 @@ def _flatten_e2(e2: dict) -> dict:
 @app.route("/api/trading/settings", methods=["GET"])
 @login_required
 def api_get_trading_settings():
+    user_id = session["user_id"]
     return jsonify({
-        "enabled":           trader_db.get_setting("enabled",        "0") == "1",
-        "testnet":           trader_db.get_setting("testnet",        "0") == "1",
-        "api_key":           "****" if trader_db.get_setting("api_key")        else "",
-        "api_secret":        "****" if trader_db.get_setting("api_secret")     else "",
-        "tn_api_key":        "****" if trader_db.get_setting("tn_api_key")     else "",
-        "tn_api_secret":     "****" if trader_db.get_setting("tn_api_secret")  else "",
-        "min_confidence":    int(trader_db.get_setting("min_confidence", "75")),
-        "max_trades":        int(trader_db.get_setting("max_trades",     "6")),
-        "leverage":          int(trader_db.get_setting("leverage",       "10")),
-        "risk_pct":          float(trader_db.get_setting("risk_pct",     "0.5")),
-        "trade_tp_usd":      float(trader_db.get_setting("trade_tp_usd",  "0")),
-        "basket_tp_usd":     float(trader_db.get_setting("basket_tp_usd", "0")),
+        "enabled":           trader_db.get_setting("enabled",        user_id, "0") == "1",
+        "testnet":           trader_db.get_setting("testnet",        user_id, "0") == "1",
+        "api_key":           "****" if trader_db.get_setting("api_key", user_id)        else "",
+        "api_secret":        "****" if trader_db.get_setting("api_secret", user_id)     else "",
+        "tn_api_key":        "****" if trader_db.get_setting("tn_api_key", user_id)     else "",
+        "tn_api_secret":     "****" if trader_db.get_setting("tn_api_secret", user_id)  else "",
+        "min_confidence":    int(trader_db.get_setting("min_confidence", user_id, "75")),
+        "max_trades":        int(trader_db.get_setting("max_trades", user_id, "6")),
+        "leverage":          int(trader_db.get_setting("leverage", user_id, "10")),
+        "risk_pct":          float(trader_db.get_setting("risk_pct", user_id, "0.5")),
+        "trade_tp_usd":      float(trader_db.get_setting("trade_tp_usd", user_id, "0")),
+        "basket_tp_usd":     float(trader_db.get_setting("basket_tp_usd", user_id, "0")),
     })
 
 @app.route("/api/trading/settings", methods=["POST"])
 @login_required
 def api_save_trading_settings():
+    user_id = session["user_id"]
     data = request.json
     if data.get("api_key")        and "****" not in data["api_key"]:
-        trader_db.set_setting("api_key",        data["api_key"])
+        trader_db.set_setting("api_key",        data["api_key"], user_id)
     if data.get("api_secret")     and "****" not in data["api_secret"]:
-        trader_db.set_setting("api_secret",     data["api_secret"])
+        trader_db.set_setting("api_secret",     data["api_secret"], user_id)
     if data.get("tn_api_key")     and "****" not in data["tn_api_key"]:
-        trader_db.set_setting("tn_api_key",     data["tn_api_key"])
+        trader_db.set_setting("tn_api_key",     data["tn_api_key"], user_id)
     if data.get("tn_api_secret")  and "****" not in data["tn_api_secret"]:
-        trader_db.set_setting("tn_api_secret",  data["tn_api_secret"])
-    trader_db.set_setting("enabled",        "1" if data.get("enabled") else "0")
-    trader_db.set_setting("testnet",        "1" if data.get("testnet") else "0")
-    trader_db.set_setting("min_confidence", str(int(data.get("min_confidence",   75))))
-    trader_db.set_setting("max_trades",     str(int(data.get("max_trades",       6))))
-    trader_db.set_setting("leverage",       str(int(data.get("leverage",         10))))
-    trader_db.set_setting("risk_pct",       str(float(data.get("risk_pct",       0.5))))
-    trader_db.set_setting("trade_tp_usd",   str(float(data.get("trade_tp_usd",   0))))
-    trader_db.set_setting("basket_tp_usd",  str(float(data.get("basket_tp_usd",  0))))
+        trader_db.set_setting("tn_api_secret",  data["tn_api_secret"], user_id)
+    trader_db.set_setting("enabled",        "1" if data.get("enabled") else "0", user_id)
+    trader_db.set_setting("testnet",        "1" if data.get("testnet") else "0", user_id)
+    trader_db.set_setting("min_confidence", str(int(data.get("min_confidence",   75))), user_id)
+    trader_db.set_setting("max_trades",     str(int(data.get("max_trades",       6))), user_id)
+    trader_db.set_setting("leverage",       str(int(data.get("leverage",         10))), user_id)
+    trader_db.set_setting("risk_pct",       str(float(data.get("risk_pct",       0.5))), user_id)
+    trader_db.set_setting("trade_tp_usd",   str(float(data.get("trade_tp_usd",   0))), user_id)
+    trader_db.set_setting("basket_tp_usd",  str(float(data.get("basket_tp_usd",  0))), user_id)
     return jsonify({"ok": True})
 
 
@@ -680,18 +682,58 @@ def api_trading_positions():
 @app.route("/api/trading/open")
 @login_required
 def api_open_trades():
-    return jsonify(trader_db.get_open_trades())
+    user_id = session["user_id"]
+    return jsonify(trader_db.get_open_trades(user_id))
 
 @app.route("/api/trading/history")
 @login_required
 def api_trading_history():
-    return jsonify(trader_db.get_closed_trades())
+    user_id = session["user_id"]
+    return jsonify(trader_db.get_closed_trades(user_id))
 
 @app.route("/api/trading/sync_history", methods=["POST"])
 @login_required
 def api_sync_history():
     result = auto_trader.sync_history_from_binance()
     return jsonify(result)
+
+@app.route("/api/user/account")
+@login_required
+def api_user_account():
+    user_id = session["user_id"]
+    user = trader_db.get_user_by_id(user_id)
+    keys = trader_db.get_binance_keys(user_id)
+    return jsonify({
+        "id": user["id"],
+        "email": user["email"],
+        "username": user["username"],
+        "role": user["role"],
+        "has_binance_keys": keys is not None
+    })
+
+@app.route("/api/user/binance-keys", methods=["GET"])
+@login_required
+def api_get_binance_keys():
+    user_id = session["user_id"]
+    keys = trader_db.get_binance_keys(user_id)
+    return jsonify({
+        "has_keys": keys is not None,
+        "api_key": "****" if keys and keys["api_key"] else ""
+    })
+
+@app.route("/api/user/binance-keys", methods=["POST"])
+@login_required
+def api_save_binance_keys():
+    user_id = session["user_id"]
+    data = request.json
+    api_key = data.get("api_key", "").strip()
+    api_secret = data.get("api_secret", "").strip()
+    if not api_key or not api_secret:
+        return jsonify({"error": "API key and secret required"}), 400
+    if "****" not in api_key and "****" not in api_secret:
+        trader_db.set_binance_keys(user_id, api_key, api_secret)
+        return jsonify({"ok": True})
+    return jsonify({"error": "Partially masked keys not allowed. Clear both fields or provide full keys"})
 
 @app.route("/api/debug/settings")
 @login_required
