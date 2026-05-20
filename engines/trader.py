@@ -16,7 +16,6 @@ class AutoTrader:
         self.socketio = socketio
         self._position_cache = {}  # pair -> {direction, entry_price, qty}
         self._startup_synced = False
-        trader_db.init_db()
 
     # ── Public: called from main after every engine run ─────────────────
 

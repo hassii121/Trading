@@ -104,10 +104,11 @@ def admin_required(f):
 
 # Shared Binance client (public market data — no auth required for candles)
 try:
-    binance_client = Client(cfg.API_KEY, cfg.API_SECRET)
-except Exception as e:
-    log.warning("Binance client init failed (geo-restriction?): %s", e)
     binance_client = Client(cfg.API_KEY, cfg.API_SECRET, requests_params={"timeout": 30})
+    log.info("Binance client ready")
+except Exception as e:
+    log.warning("Binance client init failed: %s — using stub", e)
+    binance_client = None
 
 # Engine instances
 engine1 = Engine1(cfg, binance_client)
