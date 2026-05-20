@@ -122,31 +122,34 @@ auto_trader = AutoTrader(socketio)
 _db_ready = False
 
 def _setup_db():
+    """Create tables + upsert admin from env vars. Safe to call multiple times."""
     global _db_ready
     if _db_ready:
         return
     try:
         trader_db.init_db()
-        log.info("Database tables ready")
         _db_ready = True
+        log.info("Database ready")
     except Exception as e:
         log.error("init_db failed: %s", e)
         return
-    try:
-        if trader_db.get_user_count() == 0:
-            email    = os.environ.get("ADMIN_EMAIL", "")
-            password = os.environ.get("ADMIN_PASSWORD", "")
-            username = os.environ.get("ADMIN_USERNAME", "admin")
-            if email and password:
+    # Always ensure admin exists — checks by email, never duplicates
+    email    = os.environ.get("ADMIN_EMAIL", "").strip().lower()
+    password = os.environ.get("ADMIN_PASSWORD", "").strip()
+    username = os.environ.get("ADMIN_USERNAME", "admin").strip()
+    if email and password:
+        try:
+            if not trader_db.get_user_by_email(email):
                 trader_db.create_user(email, username,
                                       generate_password_hash(password), "admin")
-                log.info("Auto-created admin account: %s", email)
+                log.info("Admin account created: %s", email)
             else:
-                log.warning("ADMIN_EMAIL/ADMIN_PASSWORD not set — skipping auto-admin")
-    except Exception as e:
-        log.error("_ensure_admin failed: %s", e)
+                log.info("Admin account already exists: %s", email)
+        except Exception as e:
+            log.error("Admin creation failed: %s", e)
+    else:
+        log.warning("ADMIN_EMAIL/ADMIN_PASSWORD not set in env vars")
 
-# Run once at startup — if DB not ready yet it will retry on first request
 _setup_db()
 
 # Cache: last known result per pair — replayed to newly connected clients
@@ -209,18 +212,11 @@ def login_page():
                 return redirect(url_for("index"))
         else:
             error = "Invalid email or password"
-    else:
-        # Only redirect to register on fresh GET when no users exist
-        if trader_db.get_user_count() == 0:
-            return redirect(url_for("register_page"))
     return render_template("login.html", error=error)
 
 @app.route("/register", methods=["GET", "POST"])
 def register_page():
-    # Only accessible when no users exist (first-time setup after DB wipe)
-    if trader_db.get_user_count() > 0:
-        return redirect(url_for("login_page"))
-    if session.get("user_id"):
+    if session.get("user_id") and trader_db.get_user_by_id(session["user_id"]):
         return redirect(url_for("index"))
     error = None
     if request.method == "POST":
@@ -237,10 +233,8 @@ def register_page():
         elif trader_db.get_user_by_email(email):
             error = "Email already registered"
         else:
-            # First user becomes admin
-            role = "admin" if trader_db.get_user_count() == 0 else "user"
             trader_db.create_user(email, username,
-                                  generate_password_hash(password), role)
+                                  generate_password_hash(password), "user")
             user = trader_db.get_user_by_email(email)
             session["user_id"]  = user["id"]
             session["username"] = user["username"]
