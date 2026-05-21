@@ -622,14 +622,16 @@ def api_get_trading_settings():
 def api_save_trading_settings():
     user_id = session["user_id"]
     data = request.json
-    if data.get("api_key")        and "****" not in data["api_key"]:
-        trader_db.set_setting("api_key",        data["api_key"], user_id)
-    if data.get("api_secret")     and "****" not in data["api_secret"]:
-        trader_db.set_setting("api_secret",     data["api_secret"], user_id)
-    if data.get("tn_api_key")     and "****" not in data["tn_api_key"]:
-        trader_db.set_setting("tn_api_key",     data["tn_api_key"], user_id)
-    if data.get("tn_api_secret")  and "****" not in data["tn_api_secret"]:
-        trader_db.set_setting("tn_api_secret",  data["tn_api_secret"], user_id)
+    # Save API keys only if they're not masked
+    if data.get("api_key") and "****" not in str(data.get("api_key", "")):
+        trader_db.set_setting("api_key", data["api_key"], user_id)
+    if data.get("api_secret") and "****" not in str(data.get("api_secret", "")):
+        trader_db.set_setting("api_secret", data["api_secret"], user_id)
+    if data.get("tn_api_key") and "****" not in str(data.get("tn_api_key", "")):
+        trader_db.set_setting("tn_api_key", data["tn_api_key"], user_id)
+    if data.get("tn_api_secret") and "****" not in str(data.get("tn_api_secret", "")):
+        trader_db.set_setting("tn_api_secret", data["tn_api_secret"], user_id)
+    # Always save other settings
     trader_db.set_setting("enabled",        "1" if data.get("enabled") else "0", user_id)
     trader_db.set_setting("testnet",        "1" if data.get("testnet") else "0", user_id)
     trader_db.set_setting("min_confidence", str(int(data.get("min_confidence",   75))), user_id)
@@ -647,11 +649,18 @@ def api_save_trading_settings():
 @login_required
 def api_trading_account():
     user_id = session["user_id"]
-    keys = trader_db.get_binance_keys(user_id)
-    if not keys:
-        return jsonify({"ok": False, "error": "Binance API keys not configured. Add them in Settings."})
+    testnet = trader_db.get_setting("testnet", user_id) == "1"
+    if testnet:
+        api_key = trader_db.get_setting("tn_api_key", user_id)
+        api_secret = trader_db.get_setting("tn_api_secret", user_id)
+    else:
+        api_key = trader_db.get_setting("api_key", user_id)
+        api_secret = trader_db.get_setting("api_secret", user_id)
+    if not api_key or not api_secret:
+        mode = "Testnet" if testnet else "Real"
+        return jsonify({"ok": False, "error": f"{mode} API keys not configured. Add them in Settings."})
     try:
-        client = Client(keys["api_key"], keys["api_secret"])
+        client = Client(api_key, api_secret)
         account = client.futures_account()
         return jsonify({
             "ok":              True,
@@ -667,8 +676,19 @@ def api_trading_account():
 @login_required
 def api_trading_positions():
     """Live open positions pulled directly from Binance — shows all trades, not just bot-opened ones."""
+    user_id = session["user_id"]
+    testnet = trader_db.get_setting("testnet", user_id) == "1"
+    if testnet:
+        api_key = trader_db.get_setting("tn_api_key", user_id)
+        api_secret = trader_db.get_setting("tn_api_secret", user_id)
+    else:
+        api_key = trader_db.get_setting("api_key", user_id)
+        api_secret = trader_db.get_setting("api_secret", user_id)
+    if not api_key or not api_secret:
+        mode = "Testnet" if testnet else "Real"
+        return jsonify({"error": f"{mode} API keys not configured"}), 400
     try:
-        client = auto_trader._get_client()
+        client = Client(api_key, api_secret)
         raw    = client.futures_position_information()
         positions = []
         for p in raw:
@@ -709,8 +729,23 @@ def api_trading_history():
 @app.route("/api/trading/sync_history", methods=["POST"])
 @login_required
 def api_sync_history():
-    result = auto_trader.sync_history_from_binance()
-    return jsonify(result)
+    user_id = session["user_id"]
+    testnet = trader_db.get_setting("testnet", user_id) == "1"
+    if testnet:
+        api_key = trader_db.get_setting("tn_api_key", user_id)
+        api_secret = trader_db.get_setting("tn_api_secret", user_id)
+    else:
+        api_key = trader_db.get_setting("api_key", user_id)
+        api_secret = trader_db.get_setting("api_secret", user_id)
+    if not api_key or not api_secret:
+        mode = "Testnet" if testnet else "Real"
+        return jsonify({"error": f"{mode} API keys not configured", "added": 0})
+    try:
+        client = Client(api_key, api_secret)
+        result = auto_trader._sync_history_with_client(client, user_id)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e), "added": 0})
 
 @app.route("/api/user/account")
 @login_required

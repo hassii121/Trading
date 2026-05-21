@@ -236,6 +236,51 @@ class AutoTrader:
             self.socketio.emit("history_synced", {"added": added})
         return {"added": added}
 
+    def _sync_history_with_client(self, client, user_id, since_hours=48) -> dict:
+        """Sync trade history using a specific client and user_id."""
+        since_ms = int((time.time() - since_hours * 3600) * 1000)
+        existing = trader_db.get_closed_trades(user_id, limit=2000)
+        existing_keys = {(t["pair"], round(float(t["pnl"] or 0), 2)) for t in existing}
+        try:
+            income = client.futures_income_history(
+                incomeType="REALIZED_PNL", startTime=since_ms, limit=200)
+        except Exception as e:
+            log.error("Sync: income fetch failed: %s", e)
+            return {"error": str(e), "added": 0}
+        pairs_with_pnl = {ev["symbol"] for ev in income if float(ev.get("income", 0)) != 0}
+        log.info("Sync: scanning %d pairs for user %d", len(pairs_with_pnl), user_id)
+        added = 0
+        for pair in pairs_with_pnl:
+            try:
+                fills = client.futures_account_trades(symbol=pair, startTime=since_ms, limit=50)
+                for fill in fills:
+                    rpnl = float(fill.get("realizedPnl", 0))
+                    if rpnl == 0:
+                        continue
+                    close_price = float(fill["price"])
+                    qty = abs(float(fill["qty"]))
+                    side = fill["side"]
+                    direction = "BUY" if side == "SELL" else "SELL"
+                    key = (pair, round(rpnl, 2))
+                    if key in existing_keys:
+                        continue
+                    if direction == "BUY":
+                        entry_price = round(close_price - rpnl / qty, 6)
+                    else:
+                        entry_price = round(close_price + rpnl / qty, 6)
+                    trader_db.add_closed_trade_direct({
+                        "pair": pair, "direction": direction, "entry_price": entry_price,
+                        "close_price": close_price, "qty": qty, "notional": round(qty * close_price, 2),
+                        "pnl": round(rpnl, 4), "close_reason": "TP" if rpnl > 0 else "SL",
+                    }, user_id)
+                    existing_keys.add(key)
+                    added += 1
+                    log.info("Sync: recovered %s | PnL: %.4f", pair, rpnl)
+            except Exception as e:
+                log.debug("Sync [%s]: %s", pair, e)
+        log.info("Sync: done — %d records added", added)
+        return {"added": added}
+
     # ── Public: account info for dashboard ───────────────────────────────
 
     def get_account_info(self) -> dict:
