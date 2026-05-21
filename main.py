@@ -660,7 +660,7 @@ def api_trading_account():
         mode = "Testnet" if testnet else "Real"
         return jsonify({"ok": False, "error": f"{mode} API keys not configured. Add them in Settings."})
     try:
-        client = Client(api_key, api_secret)
+        client = Client(api_key, api_secret, testnet=testnet)
         account = client.futures_account()
         return jsonify({
             "ok":              True,
@@ -688,7 +688,7 @@ def api_trading_positions():
         mode = "Testnet" if testnet else "Real"
         return jsonify({"error": f"{mode} API keys not configured"}), 400
     try:
-        client = Client(api_key, api_secret)
+        client = Client(api_key, api_secret, testnet=testnet)
         raw    = client.futures_position_information()
         positions = []
         for p in raw:
@@ -741,7 +741,7 @@ def api_sync_history():
         mode = "Testnet" if testnet else "Real"
         return jsonify({"error": f"{mode} API keys not configured", "added": 0})
     try:
-        client = Client(api_key, api_secret)
+        client = Client(api_key, api_secret, testnet=testnet)
         result = auto_trader._sync_history_with_client(client, user_id)
         return jsonify(result)
     except Exception as e:
