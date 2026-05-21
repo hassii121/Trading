@@ -81,6 +81,7 @@ def init_db():
             tp1_order_id   TEXT,
             confidence     INTEGER,
             timeframe      TEXT,
+            tp1_hit        INTEGER DEFAULT 0,
             opened_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         CREATE TABLE IF NOT EXISTS closed_trades (
@@ -103,6 +104,12 @@ def init_db():
         );
     """)
     conn.commit()
+    # Migration: add tp1_hit column if it doesn't exist
+    try:
+        conn.execute("ALTER TABLE open_trades ADD COLUMN tp1_hit INTEGER DEFAULT 0")
+        conn.commit()
+    except:
+        pass  # Column already exists
     conn.close()
 
 def get_user_count():
@@ -319,5 +326,11 @@ def add_closed_trade_direct(data, user_id):
                   data.get('sl'), data.get('tp1'), data['qty'], data.get('notional'),
                   data['pnl'], data['close_reason'], data.get('confidence'), data.get('timeframe'),
                   data.get('opened_at')))
+    conn.commit()
+    conn.close()
+
+def mark_trade_tp1_hit(trade_id):
+    conn = get_conn()
+    conn.execute("UPDATE open_trades SET tp1_hit=1 WHERE id=?", (trade_id,))
     conn.commit()
     conn.close()

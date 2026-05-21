@@ -144,16 +144,45 @@ class AutoTrader:
         total_upnl = 0.0
         remaining  = []
 
+        # Read scale-out settings
+        scale_out_enabled = trader_db.get_setting("scale_out_enabled", "0") == "1"
+        scale_out_pct = float(trader_db.get_setting("scale_out_pct", "50"))
+        scale_tp1_usd = float(trader_db.get_setting("scale_tp1_usd", "0") or 0)
+        scale_tp2_usd = float(trader_db.get_setting("scale_tp2_usd", "0") or 0)
+
         for pair, amt, upnl, entry_price in active:
             self.socketio.emit("trade_pnl", {"pair": pair, "unrealized_pnl": upnl})
 
-            if trade_tp_usd > 0 and upnl >= trade_tp_usd:
-                log.info("AutoTrader [%s]: per-trade TP hit ($%.2f >= $%.2f) — closing",
-                         pair, upnl, trade_tp_usd)
-                self._close_position(client, pair, amt, entry_price, "TP_USD")
+            db_trade = trader_db.get_open_trade_by_pair(pair)
+            tp1_hit = db_trade.get("tp1_hit", 0) if db_trade else 0
+
+            if scale_out_enabled and scale_tp1_usd > 0 and scale_tp2_usd > 0:
+                if tp1_hit == 0 and upnl >= scale_tp1_usd:
+                    # First TP: close scale_out_pct of position
+                    qty = abs(amt)
+                    close_qty = round(qty * scale_out_pct / 100, 8)
+                    self._partial_close(client, pair, close_qty, entry_price, "SCALE_TP1")
+                    if db_trade:
+                        trader_db.mark_trade_tp1_hit(db_trade["id"])
+                    # Tighten SL to breakeven
+                    self._place_new_sl(client, pair, entry_price, amt)
+                elif tp1_hit == 1 and upnl >= scale_tp2_usd:
+                    # Second TP: close remaining position
+                    log.info("AutoTrader [%s]: scale TP2 hit ($%.2f >= $%.2f) — closing",
+                             pair, upnl, scale_tp2_usd)
+                    self._close_position(client, pair, amt, entry_price, "SCALE_TP2")
+                else:
+                    total_upnl += upnl
+                    remaining.append((pair, amt, entry_price))
             else:
-                total_upnl += upnl
-                remaining.append((pair, amt, entry_price))
+                # Old logic: single TP close (when scale_out is disabled)
+                if trade_tp_usd > 0 and upnl >= trade_tp_usd:
+                    log.info("AutoTrader [%s]: per-trade TP hit ($%.2f >= $%.2f) — closing",
+                             pair, upnl, trade_tp_usd)
+                    self._close_position(client, pair, amt, entry_price, "TP_USD")
+                else:
+                    total_upnl += upnl
+                    remaining.append((pair, amt, entry_price))
 
         # Basket TP — close everything if combined PnL target hit
         if basket_tp_usd > 0 and remaining and total_upnl >= basket_tp_usd:
@@ -357,15 +386,17 @@ class AutoTrader:
 
             # ── Take Profit 1 ───────────────────────────────────────────
             tp1_order_id = None
-            try:
-                tp_order = client.futures_create_order(
-                    symbol=pair, side=sl_side, type="TAKE_PROFIT_MARKET",
-                    stopPrice=self._fmt_price(tp1),
-                    closePosition=True, workingType="MARK_PRICE"
-                )
-                tp1_order_id = str(tp_order["orderId"])
-            except BinanceAPIException as e:
-                log.error("AutoTrader [%s]: TP1 order failed: %s", pair, e.message)
+            scale_out_enabled = trader_db.get_setting("scale_out_enabled", "0") == "1"
+            if not scale_out_enabled:
+                try:
+                    tp_order = client.futures_create_order(
+                        symbol=pair, side=sl_side, type="TAKE_PROFIT_MARKET",
+                        stopPrice=self._fmt_price(tp1),
+                        closePosition=True, workingType="MARK_PRICE"
+                    )
+                    tp1_order_id = str(tp_order["orderId"])
+                except BinanceAPIException as e:
+                    log.error("AutoTrader [%s]: TP1 order failed: %s", pair, e.message)
 
             # ── Save to DB ──────────────────────────────────────────────
             trade_id = trader_db.add_open_trade({
@@ -559,6 +590,80 @@ class AutoTrader:
             if not api_key or not api_secret:
                 raise ValueError("Real API keys not configured")
             return Client(api_key, api_secret)
+
+    def _partial_close(self, client, pair: str, qty_to_close: float, entry_price: float, reason: str):
+        """Close a portion of a position at market price."""
+        try:
+            # Get current position direction
+            positions = client.futures_position_information()
+            current_pos = next((p for p in positions if p["symbol"] == pair), None)
+            if not current_pos:
+                log.error("AutoTrader [%s]: position not found for partial close", pair)
+                return None, 0
+
+            pos_amt = float(current_pos.get("positionAmt", 0))
+            if pos_amt == 0:
+                log.warning("AutoTrader [%s]: position already closed", pair)
+                return None, 0
+
+            # Cancel all existing orders
+            try:
+                client.futures_cancel_all_open_orders(symbol=pair)
+            except:
+                pass
+
+            # Determine close side
+            close_side = "SELL" if pos_amt > 0 else "BUY"
+
+            # Place partial close order
+            order = client.futures_create_order(
+                symbol=pair, side=close_side, type="MARKET",
+                quantity=qty_to_close, reduceOnly=True
+            )
+
+            # Get fill price
+            fills = client.futures_account_trades(symbol=pair, limit=1)
+            close_price = float(fills[0]["price"]) if fills else entry_price
+
+            # Calculate PnL for this portion
+            pnl = (close_price - entry_price) * qty_to_close
+            if pos_amt < 0:  # SELL direction
+                pnl = -pnl
+            pnl = round(pnl, 4)
+
+            log.info("AutoTrader [%s]: partial close %.6f @ %.4f | PnL: %.4f | %s",
+                     pair, qty_to_close, close_price, pnl, reason)
+            self.socketio.emit("trade_pnl_partial", {
+                "pair": pair, "qty": qty_to_close, "price": close_price, "pnl": pnl, "reason": reason
+            })
+            return close_price, pnl
+        except Exception as e:
+            log.error("AutoTrader [%s]: partial close failed: %s", pair, e)
+            return None, 0
+
+    def _place_new_sl(self, client, pair: str, sl_price: float, current_amt: float):
+        """Place a new SL order at a tighter level (e.g., breakeven)."""
+        try:
+            # Cancel existing orders
+            try:
+                client.futures_cancel_all_open_orders(symbol=pair)
+            except:
+                pass
+
+            # Determine SL side
+            sl_side = "SELL" if current_amt > 0 else "BUY"
+
+            # Place new SL
+            order = client.futures_create_order(
+                symbol=pair, side=sl_side, type="STOP_MARKET",
+                stopPrice=self._fmt_price(sl_price),
+                closePosition=True, workingType="MARK_PRICE"
+            )
+            log.info("AutoTrader [%s]: new SL placed @ %.4f", pair, sl_price)
+            return str(order["orderId"])
+        except Exception as e:
+            log.error("AutoTrader [%s]: place new SL failed: %s", pair, e)
+            return None
 
     def _get_equity(self, client) -> float:
         account = client.futures_account()

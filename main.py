@@ -615,6 +615,10 @@ def api_get_trading_settings():
         "risk_pct":          float(trader_db.get_setting("risk_pct", user_id, "0.5")),
         "trade_tp_usd":      float(trader_db.get_setting("trade_tp_usd", user_id, "0")),
         "basket_tp_usd":     float(trader_db.get_setting("basket_tp_usd", user_id, "0")),
+        "scale_out_enabled": trader_db.get_setting("scale_out_enabled", user_id, "0") == "1",
+        "scale_out_pct":     int(trader_db.get_setting("scale_out_pct", user_id, "50")),
+        "scale_tp1_usd":     float(trader_db.get_setting("scale_tp1_usd", user_id, "0")),
+        "scale_tp2_usd":     float(trader_db.get_setting("scale_tp2_usd", user_id, "0")),
     })
 
 @app.route("/api/trading/settings", methods=["POST"])
@@ -640,6 +644,11 @@ def api_save_trading_settings():
     trader_db.set_setting("risk_pct",       str(float(data.get("risk_pct",       0.5))), user_id)
     trader_db.set_setting("trade_tp_usd",   str(float(data.get("trade_tp_usd",   0))), user_id)
     trader_db.set_setting("basket_tp_usd",  str(float(data.get("basket_tp_usd",  0))), user_id)
+    # Scale-out strategy settings
+    trader_db.set_setting("scale_out_enabled", "1" if data.get("scale_out_enabled") else "0", user_id)
+    trader_db.set_setting("scale_out_pct",     str(int(data.get("scale_out_pct", 50))), user_id)
+    trader_db.set_setting("scale_tp1_usd",     str(float(data.get("scale_tp1_usd", 0))), user_id)
+    trader_db.set_setting("scale_tp2_usd",     str(float(data.get("scale_tp2_usd", 0))), user_id)
     return jsonify({"ok": True})
 
 

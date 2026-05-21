@@ -1,0 +1,18 @@
+[Unit]
+Description=HASSII Institute Trading Platform
+After=network.target postgresql.service
+
+[Service]
+User=www-data
+WorkingDirectory=/var/www/hassii/HASSII_Institute
+EnvironmentFile=/var/www/hassii/HASSII_Institute/.env
+ExecStart=/var/www/hassii/HASSII_Institute/venv/bin/gunicorn \
+    --worker-class eventlet \
+    -w 1 \
+    --bind 127.0.0.1:5050 \
+    main:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
