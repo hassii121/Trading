@@ -2,7 +2,7 @@
 const socket = io();
 
 let currentPair = null;
-let currentTF   = '30m';
+let currentTF   = '15m';
 let latestData  = {};   // keyed by pair symbol
 
 /* ── Clock ─────────────────────────────────────────────────────────── */
