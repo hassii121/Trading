@@ -12,8 +12,9 @@ log = logging.getLogger(__name__)
 
 
 class AutoTrader:
-    def __init__(self, socketio):
+    def __init__(self, socketio, user_id=1):
         self.socketio = socketio
+        self.user_id = user_id  # For single-user system: admin user_id=1
         self._position_cache = {}  # pair -> {direction, entry_price, qty}
         self._startup_synced = False
 
@@ -32,17 +33,17 @@ class AutoTrader:
             if decision not in ("BUY", "SELL"):
                 return
 
-            min_conf = int(trader_db.get_setting("min_confidence", None, "75"))
+            min_conf = int(trader_db.get_setting("min_confidence", self.user_id, "75"))
             if confidence < min_conf:
                 return
 
-            max_trades  = int(trader_db.get_setting("max_trades", None, "6"))
-            open_trades = trader_db.get_open_trades()
+            max_trades  = int(trader_db.get_setting("max_trades", self.user_id, "6"))
+            open_trades = trader_db.get_open_trades(self.user_id)
             if len(open_trades) >= max_trades:
                 log.info("AutoTrader [%s]: max open trades reached (%d)", pair, max_trades)
                 return
 
-            if trader_db.get_open_trade_by_pair(pair):
+            if trader_db.get_open_trade_by_pair(pair, self.user_id):
                 return  # already in this pair
 
             sl  = sig.get("stop_loss")
@@ -73,11 +74,12 @@ class AutoTrader:
         if not self._startup_synced:
             self._startup_synced = True
             import threading
-            threading.Thread(target=self.sync_history_from_binance,
+            threading.Thread(target=self._sync_history_with_client,
+                             args=(client, self.user_id),
                              daemon=True).start()
 
-        trade_tp_usd  = float(trader_db.get_setting("trade_tp_usd", None, "0") or 0)
-        basket_tp_usd = float(trader_db.get_setting("basket_tp_usd", None, "0") or 0)
+        trade_tp_usd  = float(trader_db.get_setting("trade_tp_usd", self.user_id, "0") or 0)
+        basket_tp_usd = float(trader_db.get_setting("basket_tp_usd", self.user_id, "0") or 0)
 
         # ── Fetch ALL live positions directly from Binance ────────────
         try:
@@ -101,7 +103,7 @@ class AutoTrader:
         current_pairs = {pair for pair, _, _, _ in active}
         for pair, cached in list(self._position_cache.items()):
             if pair not in current_pairs:
-                if not trader_db.get_open_trade_by_pair(pair):
+                if not trader_db.get_open_trade_by_pair(pair, self.user_id):
                     try:
                         fills = client.futures_account_trades(symbol=pair, limit=5)
                         close_price = float(fills[-1]["price"]) if fills else cached["entry_price"]
@@ -119,7 +121,7 @@ class AutoTrader:
                             "notional":    round(cached["qty"] * close_price, 2),
                             "pnl":         pnl,
                             "close_reason": close_reason,
-                        })
+                        }, self.user_id)
                         self.socketio.emit("trade_closed", {
                             "pair": pair, "close_price": close_price,
                             "close_reason": close_reason, "pnl": pnl,
@@ -137,7 +139,7 @@ class AutoTrader:
         }
 
         if not active:
-            for trade in trader_db.get_open_trades():
+            for trade in trader_db.get_open_trades(self.user_id):
                 self._handle_closed(client, trade)
             return
 
@@ -145,15 +147,15 @@ class AutoTrader:
         remaining  = []
 
         # Read scale-out settings
-        scale_out_enabled = trader_db.get_setting("scale_out_enabled", None, "0") == "1"
-        scale_out_pct = float(trader_db.get_setting("scale_out_pct", None, "50"))
-        scale_tp1_usd = float(trader_db.get_setting("scale_tp1_usd", None, "0") or 0)
-        scale_tp2_usd = float(trader_db.get_setting("scale_tp2_usd", None, "0") or 0)
+        scale_out_enabled = trader_db.get_setting("scale_out_enabled", self.user_id, "0") == "1"
+        scale_out_pct = float(trader_db.get_setting("scale_out_pct", self.user_id, "50"))
+        scale_tp1_usd = float(trader_db.get_setting("scale_tp1_usd", self.user_id, "0") or 0)
+        scale_tp2_usd = float(trader_db.get_setting("scale_tp2_usd", self.user_id, "0") or 0)
 
         for pair, amt, upnl, entry_price in active:
             self.socketio.emit("trade_pnl", {"pair": pair, "unrealized_pnl": upnl})
 
-            db_trade = trader_db.get_open_trade_by_pair(pair)
+            db_trade = trader_db.get_open_trade_by_pair(pair, self.user_id)
             tp1_hit = db_trade.get("tp1_hit", 0) if db_trade else 0
 
             if scale_out_enabled and scale_tp1_usd > 0 and scale_tp2_usd > 0:
@@ -203,7 +205,7 @@ class AutoTrader:
         since_ms = int((time.time() - since_hours * 3600) * 1000)
 
         # Build dedup set: (pair, pnl rounded to 2dp) already in DB
-        existing = trader_db.get_closed_trades(limit=2000)
+        existing = trader_db.get_closed_trades(self.user_id, limit=2000)
         existing_keys = {(t["pair"], round(float(t["pnl"] or 0), 2)) for t in existing}
 
         # Use income history to discover which pairs had recent closures
@@ -252,7 +254,7 @@ class AutoTrader:
                         "notional":    round(qty * close_price, 2),
                         "pnl":         round(rpnl, 4),
                         "close_reason": "TP" if rpnl > 0 else "SL",
-                    })
+                    }, self.user_id)
                     existing_keys.add(key)
                     added += 1
                     log.info("AutoTrader sync: recovered %s | PnL: %.4f", pair, rpnl)
@@ -338,8 +340,8 @@ class AutoTrader:
                 log.error("AutoTrader [%s]: equity is 0", pair)
                 return
 
-            leverage = int(trader_db.get_setting("leverage", None, "10"))
-            risk_pct = float(trader_db.get_setting("risk_pct", None, "0.5")) / 100
+            leverage = int(trader_db.get_setting("leverage", self.user_id, "10"))
+            risk_pct = float(trader_db.get_setting("risk_pct", self.user_id, "0.5")) / 100
 
             # Set leverage on symbol
             try:
@@ -386,7 +388,7 @@ class AutoTrader:
 
             # ── Take Profit 1 ───────────────────────────────────────────
             tp1_order_id = None
-            scale_out_enabled = trader_db.get_setting("scale_out_enabled", None, "0") == "1"
+            scale_out_enabled = trader_db.get_setting("scale_out_enabled", self.user_id, "0") == "1"
             if not scale_out_enabled:
                 try:
                     tp_order = client.futures_create_order(
@@ -414,7 +416,7 @@ class AutoTrader:
                 'tp1_order_id':   tp1_order_id,
                 'confidence':     confidence,
                 'timeframe':      timeframe,
-            })
+            }, self.user_id)
 
             self.socketio.emit("trade_opened", {
                 "id":         trade_id,
@@ -463,7 +465,7 @@ class AutoTrader:
             pnl = round(pnl, 4)
 
             # Bot-opened trade — use existing DB close flow
-            db_trade = trader_db.get_open_trade_by_pair(pair)
+            db_trade = trader_db.get_open_trade_by_pair(pair, self.user_id)
             if db_trade:
                 trader_db.close_trade(db_trade["id"], close_price, pnl, reason)
             else:
@@ -477,7 +479,7 @@ class AutoTrader:
                     "notional":    round(qty * close_price, 2),
                     "pnl":         pnl,
                     "close_reason": reason,
-                })
+                }, self.user_id)
 
             self.socketio.emit("trade_closed", {
                 "pair": pair, "close_price": close_price,
@@ -574,19 +576,19 @@ class AutoTrader:
     # ── Helpers ──────────────────────────────────────────────────────────
 
     def _is_enabled(self) -> bool:
-        return trader_db.get_setting("enabled", None, "0") == "1"
+        return trader_db.get_setting("enabled", self.user_id, "0") == "1"
 
     def _get_client(self) -> Client:
-        testnet = trader_db.get_setting("testnet", None, "0") == "1"
+        testnet = trader_db.get_setting("testnet", self.user_id, "0") == "1"
         if testnet:
-            api_key    = trader_db.get_setting("tn_api_key", None)
-            api_secret = trader_db.get_setting("tn_api_secret", None)
+            api_key    = trader_db.get_setting("tn_api_key", self.user_id)
+            api_secret = trader_db.get_setting("tn_api_secret", self.user_id)
             if not api_key or not api_secret:
                 raise ValueError("Testnet API keys not configured")
             return Client(api_key, api_secret, testnet=True)
         else:
-            api_key    = trader_db.get_setting("api_key", None)
-            api_secret = trader_db.get_setting("api_secret", None)
+            api_key    = trader_db.get_setting("api_key", self.user_id)
+            api_secret = trader_db.get_setting("api_secret", self.user_id)
             if not api_key or not api_secret:
                 raise ValueError("Real API keys not configured")
             return Client(api_key, api_secret)

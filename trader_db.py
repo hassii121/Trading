@@ -1,4 +1,6 @@
-import sqlite3, os
+import sqlite3, os, logging
+
+log = logging.getLogger(__name__)
 
 # Stored on Railway Volume at /data — survives all redeploys
 DB_PATH = os.environ.get("DB_PATH", os.path.join(os.path.dirname(__file__), "trader.db"))
@@ -110,6 +112,31 @@ def init_db():
         conn.commit()
     except:
         pass  # Column already exists
+
+    # Migration: add user_id to trading_settings if it doesn't exist
+    try:
+        # Check if user_id column exists
+        cursor = conn.execute("PRAGMA table_info(trading_settings)")
+        columns = {row[1] for row in cursor.fetchall()}
+        if "user_id" not in columns:
+            # Recreate table with user_id
+            conn.executescript("""
+                ALTER TABLE trading_settings RENAME TO trading_settings_old;
+                CREATE TABLE trading_settings (
+                    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL DEFAULT 1,
+                    key     TEXT NOT NULL,
+                    value   TEXT,
+                    UNIQUE(user_id, key)
+                );
+                INSERT INTO trading_settings (id, user_id, key, value)
+                SELECT id, 1, key, value FROM trading_settings_old;
+                DROP TABLE trading_settings_old;
+            """)
+            conn.commit()
+    except Exception as e:
+        log.debug("Migration error: %s", e)
+
     conn.close()
 
 def get_user_count():
@@ -285,9 +312,12 @@ def get_open_trades(user_id=None):
     conn.close()
     return [dict(r) for r in rows]
 
-def get_open_trade_by_pair(pair):
+def get_open_trade_by_pair(pair, user_id=None):
     conn = get_conn()
-    row  = conn.execute("SELECT * FROM open_trades WHERE pair=?", (pair,)).fetchone()
+    if user_id:
+        row = conn.execute("SELECT * FROM open_trades WHERE pair=? AND user_id=?", (pair, user_id)).fetchone()
+    else:
+        row = conn.execute("SELECT * FROM open_trades WHERE pair=?", (pair,)).fetchone()
     conn.close()
     return dict(row) if row else None
 
