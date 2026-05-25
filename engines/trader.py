@@ -32,11 +32,11 @@ class AutoTrader:
             if decision not in ("BUY", "SELL"):
                 return
 
-            min_conf = int(trader_db.get_setting("min_confidence", "75"))
+            min_conf = int(trader_db.get_setting("min_confidence", None, "75"))
             if confidence < min_conf:
                 return
 
-            max_trades  = int(trader_db.get_setting("max_trades", "6"))
+            max_trades  = int(trader_db.get_setting("max_trades", None, "6"))
             open_trades = trader_db.get_open_trades()
             if len(open_trades) >= max_trades:
                 log.info("AutoTrader [%s]: max open trades reached (%d)", pair, max_trades)
@@ -76,8 +76,8 @@ class AutoTrader:
             threading.Thread(target=self.sync_history_from_binance,
                              daemon=True).start()
 
-        trade_tp_usd  = float(trader_db.get_setting("trade_tp_usd",  "0") or 0)
-        basket_tp_usd = float(trader_db.get_setting("basket_tp_usd", "0") or 0)
+        trade_tp_usd  = float(trader_db.get_setting("trade_tp_usd", None, "0") or 0)
+        basket_tp_usd = float(trader_db.get_setting("basket_tp_usd", None, "0") or 0)
 
         # ── Fetch ALL live positions directly from Binance ────────────
         try:
@@ -145,10 +145,10 @@ class AutoTrader:
         remaining  = []
 
         # Read scale-out settings
-        scale_out_enabled = trader_db.get_setting("scale_out_enabled", "0") == "1"
-        scale_out_pct = float(trader_db.get_setting("scale_out_pct", "50"))
-        scale_tp1_usd = float(trader_db.get_setting("scale_tp1_usd", "0") or 0)
-        scale_tp2_usd = float(trader_db.get_setting("scale_tp2_usd", "0") or 0)
+        scale_out_enabled = trader_db.get_setting("scale_out_enabled", None, "0") == "1"
+        scale_out_pct = float(trader_db.get_setting("scale_out_pct", None, "50"))
+        scale_tp1_usd = float(trader_db.get_setting("scale_tp1_usd", None, "0") or 0)
+        scale_tp2_usd = float(trader_db.get_setting("scale_tp2_usd", None, "0") or 0)
 
         for pair, amt, upnl, entry_price in active:
             self.socketio.emit("trade_pnl", {"pair": pair, "unrealized_pnl": upnl})
@@ -338,8 +338,8 @@ class AutoTrader:
                 log.error("AutoTrader [%s]: equity is 0", pair)
                 return
 
-            leverage = int(trader_db.get_setting("leverage", "10"))
-            risk_pct = float(trader_db.get_setting("risk_pct", "0.5")) / 100
+            leverage = int(trader_db.get_setting("leverage", None, "10"))
+            risk_pct = float(trader_db.get_setting("risk_pct", None, "0.5")) / 100
 
             # Set leverage on symbol
             try:
@@ -386,7 +386,7 @@ class AutoTrader:
 
             # ── Take Profit 1 ───────────────────────────────────────────
             tp1_order_id = None
-            scale_out_enabled = trader_db.get_setting("scale_out_enabled", "0") == "1"
+            scale_out_enabled = trader_db.get_setting("scale_out_enabled", None, "0") == "1"
             if not scale_out_enabled:
                 try:
                     tp_order = client.futures_create_order(
@@ -574,19 +574,19 @@ class AutoTrader:
     # ── Helpers ──────────────────────────────────────────────────────────
 
     def _is_enabled(self) -> bool:
-        return trader_db.get_setting("enabled", "0") == "1"
+        return trader_db.get_setting("enabled", None, "0") == "1"
 
     def _get_client(self) -> Client:
-        testnet = trader_db.get_setting("testnet", "0") == "1"
+        testnet = trader_db.get_setting("testnet", None, "0") == "1"
         if testnet:
-            api_key    = trader_db.get_setting("tn_api_key")
-            api_secret = trader_db.get_setting("tn_api_secret")
+            api_key    = trader_db.get_setting("tn_api_key", None)
+            api_secret = trader_db.get_setting("tn_api_secret", None)
             if not api_key or not api_secret:
                 raise ValueError("Testnet API keys not configured")
             return Client(api_key, api_secret, testnet=True)
         else:
-            api_key    = trader_db.get_setting("api_key")
-            api_secret = trader_db.get_setting("api_secret")
+            api_key    = trader_db.get_setting("api_key", None)
+            api_secret = trader_db.get_setting("api_secret", None)
             if not api_key or not api_secret:
                 raise ValueError("Real API keys not configured")
             return Client(api_key, api_secret)
