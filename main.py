@@ -735,6 +735,36 @@ def api_trading_history():
     user_id = session["user_id"]
     return jsonify(trader_db.get_closed_trades(user_id))
 
+@app.route("/api/trading/stats")
+@login_required
+def api_trading_stats():
+    user_id = session["user_id"]
+    closed = trader_db.get_closed_trades(user_id, limit=1000)
+
+    if not closed:
+        return jsonify({
+            "total_trades": 0, "wins": 0, "losses": 0, "win_rate": 0,
+            "total_pnl": 0, "avg_pnl": 0, "largest_win": 0, "largest_loss": 0
+        })
+
+    total = len(closed)
+    wins = sum(1 for t in closed if float(t["pnl"] or 0) > 0)
+    losses = total - wins
+    total_pnl = sum(float(t["pnl"] or 0) for t in closed)
+    avg_pnl = total_pnl / total if total > 0 else 0
+    pnls = [float(t["pnl"] or 0) for t in closed]
+
+    return jsonify({
+        "total_trades": total,
+        "wins": wins,
+        "losses": losses,
+        "win_rate": round(100 * wins / total, 1) if total > 0 else 0,
+        "total_pnl": round(total_pnl, 2),
+        "avg_pnl": round(avg_pnl, 2),
+        "largest_win": round(max(pnls), 2) if pnls else 0,
+        "largest_loss": round(min(pnls), 2) if pnls else 0,
+    })
+
 @app.route("/api/trading/sync_history", methods=["POST"])
 @login_required
 def api_sync_history():

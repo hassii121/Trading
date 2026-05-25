@@ -51,6 +51,7 @@
 <nav class="page-nav">
   <button class="page-tab active" data-page="analysis" onclick="switchPage('analysis')">⬡ ANALYSIS</button>
   <button class="page-tab" data-page="account"  onclick="switchPage('account')">⚡ ACCOUNT</button>
+  <button class="page-tab" data-page="positions" onclick="switchPage('positions')">📊 POSITIONS</button>
   <button class="page-tab" data-page="settings" onclick="switchPage('settings')">⚙ SETTINGS</button>
 </nav>
 
@@ -224,6 +225,37 @@
       </div>
     </section>
 
+    <!-- Trade Statistics -->
+    <section class="history-section">
+      <div class="section-title">TRADE STATISTICS</div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 15px;">
+        <div class="stat-card">
+          <div class="stat-label">TOTAL TRADES</div>
+          <div class="stat-value" id="stat-total-trades">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">WIN RATE</div>
+          <div class="stat-value" id="stat-win-rate">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">TOTAL P&L</div>
+          <div class="stat-value" id="stat-total-pnl">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">AVG P&L</div>
+          <div class="stat-value" id="stat-avg-pnl">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">LARGEST WIN</div>
+          <div class="stat-value" id="stat-largest-win">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">LARGEST LOSS</div>
+          <div class="stat-value" id="stat-largest-loss">—</div>
+        </div>
+      </div>
+    </section>
+
     <!-- Open Trades -->
     <section class="history-section">
       <div class="section-title">
@@ -264,6 +296,23 @@
     </section>
 
   </div><!-- end page-account -->
+
+  <!-- ════════════════════════════════════════════════════════════════ -->
+  <!-- PAGE: Positions (Live Dashboard)                                  -->
+  <!-- ════════════════════════════════════════════════════════════════ -->
+  <div class="page hidden" id="page-positions">
+
+    <section class="history-section">
+      <div class="section-title">
+        OPEN POSITIONS
+        <button class="refresh-btn" onclick="loadOpenPositions()" id="positions-refresh-btn">⟳ REFRESH</button>
+      </div>
+      <div id="positions-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px; margin-top: 15px;">
+        <div style="text-align: center; color: #888; padding: 40px;">No open positions</div>
+      </div>
+    </section>
+
+  </div><!-- end page-positions -->
 
   <!-- ════════════════════════════════════════════════════════════════ -->
   <!-- PAGE: Settings                                                    -->
@@ -374,6 +423,42 @@
               <input class="setting-input narrow" type="number" id="set-basket-tp"
                      min="0" step="1" value="0" placeholder="0 = off"/>
               <span class="unit">$ total</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="setting-group">
+          <div class="setting-group-title">SCALE-OUT STRATEGY</div>
+          <div class="setting-row">
+            <label class="setting-label">ENABLE SCALE-OUT</label>
+            <label class="toggle-wrap">
+              <input type="checkbox" id="set-scale-enabled"/>
+              <span class="toggle-slider"></span>
+              <span class="toggle-text" id="toggle-scaleout-text">DISABLED</span>
+            </label>
+          </div>
+          <div class="setting-row">
+            <label class="setting-label">CLOSE % AT TP1</label>
+            <div class="input-with-unit">
+              <input class="setting-input narrow" type="number" id="set-scale-pct"
+                     min="1" max="99" value="50"/>
+              <span class="unit">%</span>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label class="setting-label">TP1 TARGET</label>
+            <div class="input-with-unit">
+              <input class="setting-input narrow" type="number" id="set-scale-tp1"
+                     min="0" step="1" value="0" placeholder="0 = off"/>
+              <span class="unit">$ PnL</span>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label class="setting-label">TP2 TARGET</label>
+            <div class="input-with-unit">
+              <input class="setting-input narrow" type="number" id="set-scale-tp2"
+                     min="0" step="1" value="0" placeholder="0 = off"/>
+              <span class="unit">$ PnL</span>
             </div>
           </div>
         </div>

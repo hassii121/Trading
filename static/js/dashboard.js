@@ -440,6 +440,12 @@ function switchPage(page) {
 
   if (page === 'account')  loadAccount();
   if (page === 'settings') loadTradingSettings();
+  if (page === 'positions') {
+    stopPositionsRefresh();
+    startPositionsRefresh();
+  } else {
+    stopPositionsRefresh();
+  }
 }
 
 /* ── Account page ───────────────────────────────────────────────────── */
@@ -469,6 +475,28 @@ function loadAccount() {
   fetch('/api/trading/history')
     .then(r => r.json())
     .then(rows => renderClosedTrades(rows))
+    .catch(() => {});
+
+  fetch('/api/trading/stats')
+    .then(r => r.json())
+    .then(stats => {
+      document.getElementById('stat-total-trades').textContent = stats.total_trades;
+      const winRateEl = document.getElementById('stat-win-rate');
+      winRateEl.textContent = stats.win_rate.toFixed(1) + '%';
+      const pnlColor = stats.total_pnl >= 0 ? 'var(--green)' : 'var(--red)';
+      const totalPnlEl = document.getElementById('stat-total-pnl');
+      totalPnlEl.textContent = (stats.total_pnl >= 0 ? '+' : '') + fmt(stats.total_pnl);
+      totalPnlEl.style.color = pnlColor;
+      const avgEl = document.getElementById('stat-avg-pnl');
+      avgEl.textContent = (stats.avg_pnl >= 0 ? '+' : '') + fmt(stats.avg_pnl);
+      avgEl.style.color = stats.avg_pnl >= 0 ? 'var(--green)' : 'var(--red)';
+      const winEl = document.getElementById('stat-largest-win');
+      winEl.textContent = '+' + fmt(stats.largest_win);
+      winEl.style.color = 'var(--green)';
+      const lossEl = document.getElementById('stat-largest-loss');
+      lossEl.textContent = '-' + fmt(Math.abs(stats.largest_loss));
+      lossEl.style.color = 'var(--red)';
+    })
     .catch(() => {});
 }
 
@@ -542,6 +570,13 @@ function loadTradingSettings() {
       document.getElementById('set-riskpct').value     = d.risk_pct     != null ? d.risk_pct     : 0.5;
       document.getElementById('set-trade-tp').value    = d.trade_tp_usd  != null ? d.trade_tp_usd  : 0;
       document.getElementById('set-basket-tp').value   = d.basket_tp_usd != null ? d.basket_tp_usd : 0;
+      // Scale-out settings
+      document.getElementById('set-scale-enabled').checked = !!d.scale_out_enabled;
+      document.getElementById('set-scale-pct').value = d.scale_out_pct != null ? d.scale_out_pct : 50;
+      document.getElementById('set-scale-tp1').value = d.scale_tp1_usd != null ? d.scale_tp1_usd : 0;
+      document.getElementById('set-scale-tp2').value = d.scale_tp2_usd != null ? d.scale_tp2_usd : 0;
+      const scaleText = document.getElementById('toggle-scaleout-text');
+      if (scaleText) scaleText.textContent = d.scale_out_enabled ? 'ENABLED' : 'DISABLED';
       const cb = document.getElementById('set-enabled');
       if (cb) { cb.checked = !!d.enabled; _updateToggleText(cb.checked); }
       const tn = document.getElementById('set-testnet');
@@ -566,6 +601,10 @@ function saveTradingSettings() {
     risk_pct:       parseFloat(document.getElementById('set-riskpct').value)   || 0.5,
     trade_tp_usd:   parseFloat(document.getElementById('set-trade-tp').value)  || 0,
     basket_tp_usd:  parseFloat(document.getElementById('set-basket-tp').value) || 0,
+    scale_out_enabled: document.getElementById('set-scale-enabled').checked,
+    scale_out_pct:  parseInt(document.getElementById('set-scale-pct').value) || 50,
+    scale_tp1_usd:  parseFloat(document.getElementById('set-scale-tp1').value) || 0,
+    scale_tp2_usd:  parseFloat(document.getElementById('set-scale-tp2').value) || 0,
   };
 
   const statusEl = document.getElementById('settings-status');
@@ -589,11 +628,79 @@ function saveTradingSettings() {
     });
 }
 
+let posRefreshInterval = null;
+
+function loadOpenPositions() {
+  fetch('/api/trading/positions')
+    .then(r => r.json())
+    .then(positions => {
+      const listEl = document.getElementById('positions-list');
+      if (!Array.isArray(positions) || positions.length === 0) {
+        listEl.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: #888; padding: 40px;">No open positions</div>';
+        return;
+      }
+      let html = '';
+      positions.forEach(p => {
+        const pnlColor = p.unrealized_pnl >= 0 ? '#4ade80' : '#f87171';
+        html += `
+          <div style="border: 1px solid #444; border-radius: 8px; padding: 15px; background: #1a1a2e; font-family: monospace; font-size: 12px;">
+            <div style="font-size: 14px; font-weight: bold; margin-bottom: 10px; color: #fff;">${p.pair}</div>
+            <div style="display: flex; justify-content: space-between; margin: 5px 0;">
+              <span style="color: #888;">Direction</span>
+              <span style="text-align: right;">${p.direction}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin: 5px 0;">
+              <span style="color: #888;">Qty</span>
+              <span>${p.qty.toFixed(4)}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin: 5px 0;">
+              <span style="color: #888;">Entry</span>
+              <span>$${p.entry_price.toFixed(2)}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin: 5px 0;">
+              <span style="color: #888;">Mark</span>
+              <span>$${p.mark_price.toFixed(2)}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin: 5px 0; font-weight: bold;">
+              <span style="color: #888;">Unrealized PnL</span>
+              <span style="color: ${pnlColor};">$${p.unrealized_pnl.toFixed(2)}</span>
+            </div>
+            <div style="font-size: 11px; color: #aaa; margin-top: 8px;">SL: $${p.sl.toFixed(2)}</div>
+            <div style="font-size: 11px; color: #aaa;">TP1: $${p.tp1.toFixed(2)}</div>
+          </div>
+        `;
+      });
+      listEl.innerHTML = html;
+    })
+    .catch(() => {
+      const listEl = document.getElementById('positions-list');
+      listEl.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: #f87171; padding: 40px;">Error loading positions</div>';
+    });
+}
+
+function startPositionsRefresh() {
+  if (posRefreshInterval) clearInterval(posRefreshInterval);
+  loadOpenPositions();
+  posRefreshInterval = setInterval(loadOpenPositions, 2000);
+}
+
+function stopPositionsRefresh() {
+  if (posRefreshInterval) {
+    clearInterval(posRefreshInterval);
+    posRefreshInterval = null;
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const cb = document.getElementById('set-enabled');
   if (cb) cb.addEventListener('change', () => _updateToggleText(cb.checked));
   const tn = document.getElementById('set-testnet');
   if (tn) tn.addEventListener('change', () => _updateTestnetText(tn.checked));
+  const scaleEn = document.getElementById('set-scale-enabled');
+  if (scaleEn) scaleEn.addEventListener('change', () => {
+    const el = document.getElementById('toggle-scaleout-text');
+    if (el) el.textContent = scaleEn.checked ? 'ENABLED' : 'DISABLED';
+  });
 });
 
 function _updateToggleText(checked) {
