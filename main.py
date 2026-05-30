@@ -462,6 +462,33 @@ def _emit_payload(pair: str, e1: dict, e2: dict, e3: dict, e4: dict, e5: dict):
         },
     }
     _latest[pair] = payload
+
+    # Save signal to database if it's a BUY or SELL
+    if final_dec in ("BUY", "SELL"):
+        sig = payload["signal"]
+        try:
+            conn = trader_db.get_conn()
+            conn.execute("""
+                INSERT INTO signal_history
+                (user_id, pair, timeframe, bias, confidence, entry, sl, tp1, tp2, reason)
+                VALUES (?,?,?,?,?,?,?,?,?,?)
+            """, (
+                1,  # user_id = 1 (admin)
+                pair,
+                e1.get("timeframe", _current_tf),
+                final_dec,
+                confidence,
+                sig.get("entry_low"),
+                sig.get("stop_loss"),
+                sig.get("tp1"),
+                sig.get("tp2"),
+                sig.get("reason")
+            ))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            log.error("Failed to save signal: %s", e)
+
     socketio.emit("signal", payload)
     log.info("[%s/%s] E4→%s  E5→%d/100 (%s) risk:%.2f%%",
              pair, e1.get("timeframe", "?"),
@@ -734,6 +761,24 @@ def api_open_trades():
 def api_trading_history():
     user_id = session["user_id"]
     return jsonify(trader_db.get_closed_trades(user_id))
+
+@app.route("/api/trading/signals")
+@login_required
+def api_signal_history():
+    user_id = session["user_id"]
+    try:
+        conn = trader_db.get_conn()
+        signals = conn.execute("""
+            SELECT pair, timeframe, bias, confidence, entry, sl, tp1, tp2, reason, created_at
+            FROM signal_history
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+            LIMIT 100
+        """, (user_id,)).fetchall()
+        conn.close()
+        return jsonify([dict(s) for s in signals])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/trading/stats")
 @login_required
