@@ -51,7 +51,6 @@
 <nav class="page-nav">
   <button class="page-tab active" data-page="analysis" onclick="switchPage('analysis')">⬡ ANALYSIS</button>
   <button class="page-tab" data-page="account"  onclick="switchPage('account')">⚡ ACCOUNT</button>
-  <button class="page-tab" data-page="positions" onclick="switchPage('positions')">📊 POSITIONS</button>
   <button class="page-tab" data-page="settings" onclick="switchPage('settings')">⚙ SETTINGS</button>
 </nav>
 
@@ -300,19 +299,6 @@
   <!-- ════════════════════════════════════════════════════════════════ -->
   <!-- PAGE: Positions (Live Dashboard)                                  -->
   <!-- ════════════════════════════════════════════════════════════════ -->
-  <div class="page hidden" id="page-positions">
-
-    <section class="history-section">
-      <div class="section-title">
-        OPEN POSITIONS
-        <button class="refresh-btn" onclick="loadOpenPositions()" id="positions-refresh-btn">⟳ REFRESH</button>
-      </div>
-      <div id="positions-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px; margin-top: 15px;">
-        <div style="text-align: center; color: #888; padding: 40px;">No open positions</div>
-      </div>
-    </section>
-
-  </div><!-- end page-positions -->
 
   <!-- ════════════════════════════════════════════════════════════════ -->
   <!-- PAGE: Settings                                                    -->
