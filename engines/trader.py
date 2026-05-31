@@ -350,7 +350,12 @@ class AutoTrader:
                 log.warning("AutoTrader [%s]: set leverage failed: %s", pair, e)
 
             # Get current mark price for qty calc
-            mark    = float(client.futures_mark_price(symbol=pair)['markPrice'])
+            mark_resp = client.futures_mark_price(symbol=pair)
+            mark = float(mark_resp.get('markPrice', 0))
+            if mark <= 0:
+                log.error("AutoTrader [%s]: invalid mark price %.8f", pair, mark)
+                return
+
             step_sz, min_qty = self._get_filters(client, pair)
 
             # margin = equity * risk_pct  |  notional = margin * leverage
@@ -369,36 +374,47 @@ class AutoTrader:
             entry_order = client.futures_create_order(
                 symbol=pair, side=side, type="MARKET", quantity=qty
             )
-            actual_entry   = float(entry_order.get("avgPrice") or mark)
+            avg_price = entry_order.get("avgPrice")
+            actual_entry = float(avg_price) if avg_price and float(avg_price) > 0 else mark
             entry_order_id = str(entry_order["orderId"])
-            log.info("AutoTrader [%s]: %s entry %.4f qty=%.6f conf=%d",
-                     pair, side, actual_entry, qty, confidence)
+            log.info("AutoTrader [%s]: %s entry=%.8f qty=%.6f conf=%d order_id=%s",
+                     pair, side, actual_entry, qty, confidence, entry_order_id)
 
             # ── Stop Loss ───────────────────────────────────────────────
             sl_order_id = None
             try:
+                sl_price = self._fmt_price(sl)
+                log.debug("AutoTrader [%s]: placing SL order side=%s price=%.8f", pair, sl_side, sl_price)
                 sl_order = client.futures_create_order(
                     symbol=pair, side=sl_side, type="STOP_MARKET",
-                    stopPrice=self._fmt_price(sl),
+                    stopPrice=sl_price,
                     closePosition=True, workingType="MARK_PRICE"
                 )
                 sl_order_id = str(sl_order["orderId"])
+                log.info("AutoTrader [%s]: SL order placed id=%s price=%.8f", pair, sl_order_id, sl_price)
             except BinanceAPIException as e:
-                log.error("AutoTrader [%s]: SL order failed: %s", pair, e.message)
+                log.error("AutoTrader [%s]: SL order failed code=%s msg=%s", pair, e.status_code, str(e))
+            except Exception as e:
+                log.error("AutoTrader [%s]: SL order exception: %s", pair, str(e))
 
             # ── Take Profit 1 ───────────────────────────────────────────
             tp1_order_id = None
             scale_out_enabled = trader_db.get_setting("scale_out_enabled", self.user_id, "0") == "1"
             if not scale_out_enabled:
                 try:
+                    tp1_price = self._fmt_price(tp1)
+                    log.debug("AutoTrader [%s]: placing TP1 order side=%s price=%.8f", pair, sl_side, tp1_price)
                     tp_order = client.futures_create_order(
                         symbol=pair, side=sl_side, type="TAKE_PROFIT_MARKET",
-                        stopPrice=self._fmt_price(tp1),
+                        stopPrice=tp1_price,
                         closePosition=True, workingType="MARK_PRICE"
                     )
                     tp1_order_id = str(tp_order["orderId"])
+                    log.info("AutoTrader [%s]: TP1 order placed id=%s price=%.8f", pair, tp1_order_id, tp1_price)
                 except BinanceAPIException as e:
-                    log.error("AutoTrader [%s]: TP1 order failed: %s", pair, e.message)
+                    log.error("AutoTrader [%s]: TP1 order failed code=%s msg=%s", pair, e.status_code, str(e))
+                except Exception as e:
+                    log.error("AutoTrader [%s]: TP1 order exception: %s", pair, str(e))
 
             # ── Save to DB ──────────────────────────────────────────────
             trade_id = trader_db.add_open_trade({
@@ -434,9 +450,9 @@ class AutoTrader:
             })
 
         except BinanceAPIException as e:
-            log.error("AutoTrader [%s]: Binance error: %s", pair, e.message)
+            log.error("AutoTrader [%s]: Binance API error code=%s: %s", pair, e.status_code, str(e))
         except Exception as e:
-            log.error("AutoTrader [%s]: _place_trade error: %s", pair, e)
+            log.error("AutoTrader [%s]: _place_trade error: %s", pair, str(e), exc_info=True)
 
     # ── Internal: close any live position by pair (works for manual trades too) ──
 
