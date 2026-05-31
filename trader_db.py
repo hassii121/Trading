@@ -27,115 +27,139 @@ def get_conn():
 
 def init_db():
     conn = get_conn()
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS users (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
-            email         TEXT UNIQUE NOT NULL,
-            username      TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            role          TEXT DEFAULT 'user',
-            is_active     INTEGER DEFAULT 1,
-            created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE TABLE IF NOT EXISTS subscriptions (
-            id             INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id        INTEGER NOT NULL,
-            plan_name      TEXT,
-            amount_usd     REAL,
-            duration_days  INTEGER,
-            payment_id     TEXT,
-            pay_address    TEXT,
-            pay_amount     REAL,
-            pay_currency   TEXT,
-            payment_status TEXT DEFAULT 'pending',
-            started_at     TIMESTAMP,
-            expires_at     TIMESTAMP,
-            created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE TABLE IF NOT EXISTS trading_settings (
-            id      INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            key     TEXT NOT NULL,
-            value   TEXT,
-            UNIQUE(user_id, key)
-        );
-        CREATE TABLE IF NOT EXISTS user_binance_keys (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id    INTEGER UNIQUE NOT NULL,
-            api_key    TEXT NOT NULL,
-            api_secret TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE TABLE IF NOT EXISTS open_trades (
-            id             INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id        INTEGER NOT NULL DEFAULT 1,
-            pair           TEXT,
-            direction      TEXT,
-            entry_price    REAL,
-            sl             REAL,
-            tp1            REAL,
-            tp2            REAL,
-            tp3            REAL,
-            qty            REAL,
-            notional       REAL,
-            entry_order_id TEXT,
-            sl_order_id    TEXT,
-            tp1_order_id   TEXT,
-            confidence     INTEGER,
-            timeframe      TEXT,
-            tp1_hit        INTEGER DEFAULT 0,
-            opened_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE TABLE IF NOT EXISTS closed_trades (
-            id             INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id        INTEGER NOT NULL DEFAULT 1,
-            pair           TEXT,
-            direction      TEXT,
-            entry_price    REAL,
-            close_price    REAL,
-            sl             REAL,
-            tp1            REAL,
-            qty            REAL,
-            notional       REAL,
-            pnl            REAL,
-            close_reason   TEXT,
-            confidence     INTEGER,
-            timeframe      TEXT,
-            opened_at      TIMESTAMP,
-            closed_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-    """)
-    conn.commit()
+    try:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS users (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                email         TEXT UNIQUE NOT NULL,
+                username      TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role          TEXT DEFAULT 'user',
+                is_active     INTEGER DEFAULT 1,
+                created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS subscriptions (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id        INTEGER NOT NULL,
+                plan_name      TEXT,
+                amount_usd     REAL,
+                duration_days  INTEGER,
+                payment_id     TEXT,
+                pay_address    TEXT,
+                pay_amount     REAL,
+                pay_currency   TEXT,
+                payment_status TEXT DEFAULT 'pending',
+                started_at     TIMESTAMP,
+                expires_at     TIMESTAMP,
+                created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS trading_settings (
+                id      INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL DEFAULT 1,
+                key     TEXT NOT NULL,
+                value   TEXT,
+                UNIQUE(user_id, key)
+            );
+            CREATE TABLE IF NOT EXISTS user_binance_keys (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id    INTEGER UNIQUE NOT NULL,
+                api_key    TEXT NOT NULL,
+                api_secret TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS open_trades (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id        INTEGER NOT NULL DEFAULT 1,
+                pair           TEXT,
+                direction      TEXT,
+                entry_price    REAL,
+                sl             REAL,
+                tp1            REAL,
+                tp2            REAL,
+                tp3            REAL,
+                qty            REAL,
+                notional       REAL,
+                entry_order_id TEXT,
+                sl_order_id    TEXT,
+                tp1_order_id   TEXT,
+                confidence     INTEGER,
+                timeframe      TEXT,
+                tp1_hit        INTEGER DEFAULT 0,
+                opened_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS closed_trades (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id        INTEGER NOT NULL DEFAULT 1,
+                pair           TEXT,
+                direction      TEXT,
+                entry_price    REAL,
+                close_price    REAL,
+                sl             REAL,
+                tp1            REAL,
+                qty            REAL,
+                notional       REAL,
+                pnl            REAL,
+                close_reason   TEXT,
+                confidence     INTEGER,
+                timeframe      TEXT,
+                opened_at      TIMESTAMP,
+                closed_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS signal_history (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id    INTEGER NOT NULL DEFAULT 1,
+                pair       TEXT,
+                timeframe  TEXT,
+                bias       TEXT,
+                confidence INTEGER,
+                entry      REAL,
+                sl         REAL,
+                tp1        REAL,
+                tp2        REAL,
+                reason     TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        conn.commit()
+        log.info("Database tables created/verified at %s", DB_PATH)
+    except Exception as e:
+        log.error("Failed to create tables: %s", e)
+        raise
+
     # Migration: add tp1_hit column if it doesn't exist
     try:
         conn.execute("ALTER TABLE open_trades ADD COLUMN tp1_hit INTEGER DEFAULT 0")
         conn.commit()
-    except:
-        pass  # Column already exists
-
-    # Migration: add user_id to trading_settings if it doesn't exist
-    try:
-        # Check if user_id column exists
-        cursor = conn.execute("PRAGMA table_info(trading_settings)")
-        columns = {row[1] for row in cursor.fetchall()}
-        if "user_id" not in columns:
-            # Recreate table with user_id
-            conn.executescript("""
-                ALTER TABLE trading_settings RENAME TO trading_settings_old;
-                CREATE TABLE trading_settings (
-                    id      INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL DEFAULT 1,
-                    key     TEXT NOT NULL,
-                    value   TEXT,
-                    UNIQUE(user_id, key)
-                );
-                INSERT INTO trading_settings (id, user_id, key, value)
-                SELECT id, 1, key, value FROM trading_settings_old;
-                DROP TABLE trading_settings_old;
-            """)
-            conn.commit()
     except Exception as e:
-        log.debug("Migration error: %s", e)
+        log.debug("tp1_hit column already exists or error: %s", e)
+
+    # Migration: preserve data from trading_settings_old if it exists
+    try:
+        cursor = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='trading_settings_old'"
+        )
+        if cursor.fetchone():
+            log.info("Found trading_settings_old - migrating data...")
+            # Get all data from old table
+            cursor = conn.execute("SELECT key, value FROM trading_settings_old")
+            old_data = cursor.fetchall()
+
+            if old_data:
+                # Insert into new table
+                for row in old_data:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO trading_settings (user_id, key, value) VALUES (1, ?, ?)",
+                        (row[0], row[1])
+                    )
+                conn.commit()
+                log.info("Migrated %d settings from trading_settings_old", len(old_data))
+
+            # Drop old table
+            conn.execute("DROP TABLE trading_settings_old")
+            conn.commit()
+            log.info("trading_settings_old dropped")
+    except Exception as e:
+        log.warning("Migration error (continuing): %s", e)
 
     conn.close()
 
