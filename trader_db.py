@@ -126,10 +126,38 @@ def init_db():
         log.error("Failed to create tables: %s", e)
         raise
 
+    # Migration: add user_id column to open_trades if missing
+    try:
+        cursor = conn.execute("PRAGMA table_info(open_trades)")
+        columns = {row[1] for row in cursor.fetchall()}
+        if "user_id" not in columns:
+            log.info("Adding user_id column to open_trades...")
+            conn.execute("ALTER TABLE open_trades ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1")
+            conn.commit()
+            log.info("✓ user_id column added to open_trades")
+    except Exception as e:
+        log.warning("Could not add user_id to open_trades: %s", e)
+
+    # Migration: add user_id column to closed_trades if missing
+    try:
+        cursor = conn.execute("PRAGMA table_info(closed_trades)")
+        columns = {row[1] for row in cursor.fetchall()}
+        if "user_id" not in columns:
+            log.info("Adding user_id column to closed_trades...")
+            conn.execute("ALTER TABLE closed_trades ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1")
+            conn.commit()
+            log.info("✓ user_id column added to closed_trades")
+    except Exception as e:
+        log.warning("Could not add user_id to closed_trades: %s", e)
+
     # Migration: add tp1_hit column if it doesn't exist
     try:
-        conn.execute("ALTER TABLE open_trades ADD COLUMN tp1_hit INTEGER DEFAULT 0")
-        conn.commit()
+        cursor = conn.execute("PRAGMA table_info(open_trades)")
+        columns = {row[1] for row in cursor.fetchall()}
+        if "tp1_hit" not in columns:
+            conn.execute("ALTER TABLE open_trades ADD COLUMN tp1_hit INTEGER DEFAULT 0")
+            conn.commit()
+            log.info("✓ tp1_hit column added to open_trades")
     except Exception as e:
         log.debug("tp1_hit column already exists or error: %s", e)
 
