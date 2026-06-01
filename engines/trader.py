@@ -384,14 +384,14 @@ class AutoTrader:
             sl_order_id = None
             try:
                 sl_price = self._fmt_price(sl)
-                log.debug("AutoTrader [%s]: placing SL order side=%s price=%.8f", pair, sl_side, sl_price)
+                log.debug("AutoTrader [%s]: placing SL order side=%s stopPrice=%.8f", pair, sl_side, sl_price)
                 sl_order = client.futures_create_order(
-                    symbol=pair, side=sl_side, type="STOP_MARKET",
+                    symbol=pair, side=sl_side, type="STOP",
                     stopPrice=sl_price,
-                    closePosition=True, workingType="MARK_PRICE"
+                    closePosition=True, timeInForce="GTC"
                 )
                 sl_order_id = str(sl_order["orderId"])
-                log.info("AutoTrader [%s]: SL order placed id=%s price=%.8f", pair, sl_order_id, sl_price)
+                log.info("AutoTrader [%s]: SL order placed id=%s stopPrice=%.8f", pair, sl_order_id, sl_price)
             except BinanceAPIException as e:
                 log.error("AutoTrader [%s]: SL order failed code=%s msg=%s", pair, e.status_code, str(e))
             except Exception as e:
@@ -403,14 +403,14 @@ class AutoTrader:
             if not scale_out_enabled:
                 try:
                     tp1_price = self._fmt_price(tp1)
-                    log.debug("AutoTrader [%s]: placing TP1 order side=%s price=%.8f", pair, sl_side, tp1_price)
+                    log.debug("AutoTrader [%s]: placing TP1 order side=%s stopPrice=%.8f", pair, sl_side, tp1_price)
                     tp_order = client.futures_create_order(
-                        symbol=pair, side=sl_side, type="TAKE_PROFIT_MARKET",
+                        symbol=pair, side=sl_side, type="TAKE_PROFIT",
                         stopPrice=tp1_price,
-                        closePosition=True, workingType="MARK_PRICE"
+                        closePosition=True, timeInForce="GTC"
                     )
                     tp1_order_id = str(tp_order["orderId"])
-                    log.info("AutoTrader [%s]: TP1 order placed id=%s price=%.8f", pair, tp1_order_id, tp1_price)
+                    log.info("AutoTrader [%s]: TP1 order placed id=%s stopPrice=%.8f", pair, tp1_order_id, tp1_price)
                 except BinanceAPIException as e:
                     log.error("AutoTrader [%s]: TP1 order failed code=%s msg=%s", pair, e.status_code, str(e))
                 except Exception as e:
